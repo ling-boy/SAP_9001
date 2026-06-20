@@ -1,5 +1,6 @@
 #include "protocol/protocol_process.h"
 #include "protocol/hj212_builder.h"
+#include "protocol/constants.h"
 #include "infra/config.h"
 #include "core/device_context.h"
 #include <vector>
@@ -9,29 +10,6 @@
 // logger.h must be included AFTER all other headers to override syslog.h LOG_INFO
 #include "infra/logger.h"
 
-/* 所有全局状态已迁移至 DeviceContext 单例 */
-#define REQ_REGISTER            "01"
-#define REQ_REG_CONFIRM         "02"
-#define REQ_DATA                 "03"
-#define REQ_TXD_CONFIRM         "04"
-#define REQ_PARAM_CONFIRM       "05"
-#define REQ_PARAM_SEND          "06"
-#define REQ_ID_CONFIRM          "07"
-#define REQ_ID_SEND             "08"
-#define REQ_MONI_RET_CONFIRM    "09"
-#define REQ_MONI_RET            "10"
-#define REQ_ACC_RET_CONFIRM     "11"
-#define REQ_ACC_RET             "12"
-#define REQ_KEY_CONFIRM         "13"
-#define REQ_KEY_SEND            "14"
-#define REQ_ASK_KEY             "15"
-#define REQ_SEND_KEY            "16"
-#define REQ_SEND_INFO           "17"
-#define REQ_ACC_CLOSE           "18"
-#define REQ_GATEWAY_CLOSE       "19"
-#define TIME_SEND               "20"
-#define REQ_ACC_HEART           "EF"
-#define REQ_GATE_HEART          "FF"
 #define STOREFILEPATHNAME       CFG_STR("data", "store_file", "/home/root/storefile.txt").c_str()
 
 /** @brief 全局停止标志位，由信号处理器设置，主循环中检测 */

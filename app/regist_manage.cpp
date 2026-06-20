@@ -1,25 +1,14 @@
 #include "app/regist_manage.h"
 #include "hal/gps.h"
 #include "infra/logger.h"
+#include "infra/io_utils.h"
 #include "core/device_context.h"
 #include <cstdlib>
 #include <sys/time.h>
 #include <time.h>
 
-/**
- * @brief 完整写入，处理 partial write
- * @return 成功写入全部数据返回 0，失败返回 -1
- */
-static int write_full(int fd, const char* buf, size_t len)
-{
-    size_t total = 0;
-    while (total < len) {
-        ssize_t n = write(fd, buf + total, len - total);
-        if (n <= 0) return -1;
-        total += n;
-    }
-    return 0;
-}
+// 使用公共的 write_full 函数
+using sap::write_full;
 
 /**
  * @brief 硬件清理：关闭LED、关闭12V电源、同步RTC

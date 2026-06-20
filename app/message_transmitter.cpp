@@ -7,6 +7,7 @@
 #include "infra/software_wdt.h"
 #include "infra/communica_manage.h"
 #include "infra/message_queue.h"
+#include "infra/io_utils.h"
 #include "infra/logger.h"
 #include "protocol/protocol_process.h"
 #include "core/device_context.h"
@@ -20,24 +21,11 @@
 #include <string.h>
 #include <errno.h>
 
-/**
- * @brief 完整写入，处理 partial write
- * @return 成功写入全部数据返回 0，失败返回 -1
- */
-static int write_full(int fd, const char* buf, size_t len)
-{
-    size_t total = 0;
-    while (total < len) {
-        ssize_t n = write(fd, buf + total, len - total);
-        if (n <= 0) return -1;
-        total += n;
-    }
-    return 0;
-}
+// 使用公共的 write_full 函数
+using sap::write_full;
 
-/* 协议标识定义 */
-#define REQ_DATA    "03"
-#define TIME_SEND   "20"
+// 使用统一的协议常量定义
+#include "protocol/constants.h"
 #define RX_SIZE     58
 
 /* 所有全局状态已迁移至 DeviceContext 单例 */
