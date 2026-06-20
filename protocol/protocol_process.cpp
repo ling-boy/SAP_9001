@@ -1,4 +1,5 @@
 #include "protocol/protocol_process.h"
+#include "protocol/hj212_builder.h"
 #include "infra/config.h"
 #include "core/device_context.h"
 #include <vector>
@@ -172,49 +173,15 @@ int protoc_03(const std::string buff, std::string *communicate_method)
 }
 
 /**
- * @brief 封装私有协议06包
+ * @brief 封装私有协议06包（使用 HJ212PacketBuilder 建造者模式）
  */
 std::string packet06(std::string strT, std::string portInfo)
 {
-    auto& ctx = sap::DeviceContext::instance();
-    char packet[1024]={0};
-    std::string cpu_mem = get_cpuOccupy();
-    std::string accessdev_gps = "N2932E10636";
-    int length= (strT.length()+54);
-    std::string str = "";
-    change(length, str);
-    /* 长度字段确保4位十六进制，不足4位时前补0 */
-    int num=str.length();
-    if(num==4)
-    {
-
-    }else if(num==3)
-    {
-        str= "0" +str;
-    }else if(num==2)
-    {
-        str="00" +str;
-    }else if(num==1)
-    {
-        str="000"+str;
-    }
-
-    std::string communicateType = std::to_string(ctx.commManager().getSuccessId());
-    int needed = snprintf(packet, sizeof(packet), "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), ctx.identity().id.c_str(), ctx.identity().net_id.c_str(),
-        str.c_str(), ctx.identity().isr_mac.c_str(), ctx.identity().mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
-        ctx.identity().communicate_status, strT.c_str());
-    if (needed < 0) return "";
-    if (needed >= (int)sizeof(packet)) {
-        char* big_buf = new char[needed + 1];
-        snprintf(big_buf, needed + 1, "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), ctx.identity().id.c_str(), ctx.identity().net_id.c_str(),
-            str.c_str(), ctx.identity().isr_mac.c_str(), ctx.identity().mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
-            ctx.identity().communicate_status, strT.c_str());
-        std::string packets06(big_buf);
-        delete[] big_buf;
-        return packets06;
-    }
-    std::string packets06 = packet;
-    return packets06;
+    return sap::HJ212PacketBuilder()
+        .fromContext()
+        .withData(strT)
+        .withPortInfo(portInfo)
+        .build();
 }
 
 /**
