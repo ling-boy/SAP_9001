@@ -1,3 +1,9 @@
+/**
+ * @file communica_manage.cpp
+ * @brief 通信设备管理模块实现
+ * @details 使用智能指针管理链表节点，自动释放内存，消除内存泄漏风险
+ */
+
 #include "infra/communica_manage.h"
 #include "infra/logger.h"
 
@@ -5,28 +11,8 @@
  * @brief 构造函数，创建通信设备管理链表的头节点并初始化
  */
 communicaManage::communicaManage()
+    : head_(std::make_unique<communicateNode>())
 {
-	communicateNode = new struct communicateNode;
-	communicateNode->com = NULL;
-	communicateNode->enabled = false;
-	communicateNode->id = -1;
-	communicateNode->next = NULL;
-}
-
-/**
- * @brief 析构函数，遍历释放链表所有节点内存
- */
-communicaManage::~communicaManage()
-{
-	struct communicateNode* current = communicateNode;
-	while (current != NULL) {
-		struct communicateNode* next = current->next;
-		if (current->com != NULL) {
-			delete current->com;
-		}
-		delete current;
-		current = next;
-	}
 }
 
 /**
@@ -34,26 +20,26 @@ communicaManage::~communicaManage()
  */
 bool communicaManage::cmp(const std::vector<int>& a, const std::vector<int>& b)
 {
-	return a[0] < b[0];
+    return a[0] < b[0];
 }
 
 /**
  * @brief 按设备 ID 查找通信设备节点
  */
-struct communicateNode* communicaManage::findcommunicate(int id)
+communicateNode* communicaManage::findcommunicate(int id)
 {
-	struct communicateNode *temp = communicateNode;
-	while (temp!= NULL)
-	{
-		if (temp->id == id )
-		{
-			LOG_DEBUG("comm_mgr", "Found device ID=%d", temp->id);
-			return temp;
-		}
-		temp = temp->next;
-	}
-	LOG_DEBUG("comm_mgr", "Device ID=%d not found", id);
-	return temp;
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        if (temp->id == id)
+        {
+            LOG_DEBUG("comm_mgr", "Found device ID=%d", temp->id);
+            return temp;
+        }
+        temp = temp->next.get();
+    }
+    LOG_DEBUG("comm_mgr", "Device ID=%d not found", id);
+    return nullptr;
 }
 
 /**
@@ -61,41 +47,38 @@ struct communicateNode* communicaManage::findcommunicate(int id)
  */
 bool communicaManage::addCommunicateNode(int id, int fd, int timeout)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode *temp=NULL;
-	struct communicate * com = createComnode(fd,timeout);
-	if (communicateNode->com == NULL)
-	{
-		communicateNode->com = com;
-		communicateNode->id = id;
-		communicateNode->enabled = false;
-		communicateNode->next = NULL;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
-	else
-	{
-		temp = communicateNode;
-		while (temp != NULL)
-		{
-			if (temp->id == id) {
-				LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
-				delete com;
-				return false;
-			}
-			if (temp->next == NULL)
-				break;
-			temp = temp->next;
-		}
-		struct communicateNode *temp1 = new struct communicateNode;
-		temp1->com = com;
-		temp1->id = id;
-		temp1->enabled = false;
-		temp1->next = NULL;
-		temp->next = temp1;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto com = createComnode(fd, timeout);
+
+    if (head_->com == nullptr)
+    {
+        head_->com = std::move(com);
+        head_->id = id;
+        head_->enabled = false;
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
+    else
+    {
+        communicateNode* temp = head_.get();
+        while (temp != nullptr)
+        {
+            if (temp->id == id) {
+                LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
+                return false;
+            }
+            if (temp->next == nullptr)
+                break;
+            temp = temp->next.get();
+        }
+        auto newNode = std::make_unique<communicateNode>();
+        newNode->com = std::move(com);
+        newNode->id = id;
+        newNode->enabled = false;
+        temp->next = std::move(newNode);
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
 }
 
 /**
@@ -103,85 +86,79 @@ bool communicaManage::addCommunicateNode(int id, int fd, int timeout)
  */
 bool communicaManage::addCommunicateNode(int id)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode *temp = NULL;
-	struct communicate * com = createComnode();
-	if (communicateNode->com == NULL)
-	{
-		communicateNode->com = com;
-		communicateNode->id = id;
-		communicateNode->enabled = false;
-		communicateNode->next = NULL;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
-	else
-	{
-		temp = communicateNode;
-		while (temp != NULL)
-		{
-			if ((temp->id == id) )
-			{
-				LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
-				delete com;
-				return false;
-			}
-			if (temp->next == NULL)
-				break;
-			temp = temp->next;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto com = createComnode();
 
-		}
-		struct communicateNode *temp1 = new struct communicateNode;
-		temp1->com = com;
-		temp1->id = id;
-		temp1->enabled = false;
-		temp1->next = NULL;
-		temp->next = temp1;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
+    if (head_->com == nullptr)
+    {
+        head_->com = std::move(com);
+        head_->id = id;
+        head_->enabled = false;
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
+    else
+    {
+        communicateNode* temp = head_.get();
+        while (temp != nullptr)
+        {
+            if (temp->id == id)
+            {
+                LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
+                return false;
+            }
+            if (temp->next == nullptr)
+                break;
+            temp = temp->next.get();
+        }
+        auto newNode = std::make_unique<communicateNode>();
+        newNode->com = std::move(com);
+        newNode->id = id;
+        newNode->enabled = false;
+        temp->next = std::move(newNode);
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
 }
 
 /**
  * @brief 添加通信设备节点（常用接口）
  */
-bool communicaManage::addCommunicateNode(int id,int fd)
+bool communicaManage::addCommunicateNode(int id, int fd)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode *temp = NULL;
-	struct communicate * com = createComnode(fd);
-	if (communicateNode->com == NULL)
-	{
-		communicateNode->com = com;
-		communicateNode->id = id;
-		communicateNode->enabled = false;
-		communicateNode->next = NULL;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
-	else {
-		temp = communicateNode;
-		while (temp != NULL)
-		{
-			if ((temp->id == id) )
-			{
-				LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
-				delete com;
-				return false;
-			}
-			if (temp->next == NULL)
-				break;
-			temp = temp->next;
-		}
-		struct communicateNode *temp1 = new struct communicateNode;
-		temp1->com = com;
-		temp1->id = id;
-		temp1->enabled = false;
-		temp1->next = NULL;
-		temp->next = temp1;
-		LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-		return true;
-	}
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    auto com = createComnode(fd);
+
+    if (head_->com == nullptr)
+    {
+        head_->com = std::move(com);
+        head_->id = id;
+        head_->enabled = false;
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
+    else
+    {
+        communicateNode* temp = head_.get();
+        while (temp != nullptr)
+        {
+            if (temp->id == id)
+            {
+                LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
+                return false;
+            }
+            if (temp->next == nullptr)
+                break;
+            temp = temp->next.get();
+        }
+        auto newNode = std::make_unique<communicateNode>();
+        newNode->com = std::move(com);
+        newNode->id = id;
+        newNode->enabled = false;
+        temp->next = std::move(newNode);
+        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
+        return true;
+    }
 }
 
 /**
@@ -189,136 +166,137 @@ bool communicaManage::addCommunicateNode(int id,int fd)
  */
 bool communicaManage::deletecommunicateNode(int id)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	/* 使用虚拟头节点技巧 */
-	struct communicateNode *dummy = new struct communicateNode(-1, communicateNode);
-	struct communicateNode *prev = dummy;
-	while (prev->next != NULL)
-	{
-		if (prev->next->id == id)
-		{
-			struct communicateNode *temp = prev->next;
-			prev->next = temp->next;
-			if (temp->com != NULL) delete temp->com;
-			delete temp;
-			communicateNode = dummy->next;
-			/* 删除后若链表为空，重新创建空头节点 */
-			if (communicateNode == NULL) {
-				communicateNode = new struct communicateNode;
-				communicateNode->com = NULL;
-				communicateNode->enabled = false;
-				communicateNode->id = -1;
-				communicateNode->next = NULL;
-			}
-			delete dummy;
-			LOG_INFO("comm_mgr", "Delete device ID=%d success", id);
-			return true;
-		}
-		prev = prev->next;
-	}
-	communicateNode = dummy->next;
-	delete dummy;
-	return false;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+
+    // 特殊情况：删除头节点
+    if (head_->id == id)
+    {
+        if (head_->next)
+        {
+            head_ = std::move(head_->next);
+        }
+        else
+        {
+            head_ = std::make_unique<communicateNode>();
+        }
+        LOG_INFO("comm_mgr", "Delete device ID=%d success", id);
+        return true;
+    }
+
+    // 查找要删除的节点
+    communicateNode* prev = head_.get();
+    while (prev->next != nullptr)
+    {
+        if (prev->next->id == id)
+        {
+            auto toDelete = std::move(prev->next);
+            prev->next = std::move(toDelete->next);
+            LOG_INFO("comm_mgr", "Delete device ID=%d success", id);
+            return true;
+        }
+        prev = prev->next.get();
+    }
+    return false;
 }
 
 /**
  * @brief 重新初始化指定通信设备
  */
-bool communicaManage::reinit(int id ,int para)
+bool communicaManage::reinit(int id, int para)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode* temp = findcommunicate(id);
-	if (temp == NULL)
-	{
-		LOG_ERROR("comm_mgr", "%s", "No device found, reinit failed");
-		return false;
-	}
-	if (temp->com->reback[0] == NULL) {
-		LOG_ERROR("comm_mgr", "%s", "Reinit failed: no init callback registered");
-		return false;
-	}
-	else
-	{
-		int fd = temp->com->reback[0](para);
-		int(*func)(int para) = temp->com->reback[0];
-		deletecommunicateNode(id);
-		if (!addCommunicateNode(id, fd)) {
-			LOG_ERROR("comm_mgr", "%s", "Reinit failed: add node failed");
-			return false;
-		}
-		callbackRgist(id,0, func);
-		LOG_INFO("comm_mgr", "Reinit device ID=%d success", id);
-		return true;
-	}
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* temp = findcommunicate(id);
+    if (temp == nullptr)
+    {
+        LOG_ERROR("comm_mgr", "%s", "No device found, reinit failed");
+        return false;
+    }
+    if (temp->com->reback[0] == nullptr) {
+        LOG_ERROR("comm_mgr", "%s", "Reinit failed: no init callback registered");
+        return false;
+    }
+    else
+    {
+        int fd = temp->com->reback[0](para);
+        int(*func)(int para) = temp->com->reback[0];
+        deletecommunicateNode(id);
+        if (!addCommunicateNode(id, fd)) {
+            LOG_ERROR("comm_mgr", "%s", "Reinit failed: add node failed");
+            return false;
+        }
+        callbackRgist(id, 0, func);
+        LOG_INFO("comm_mgr", "Reinit device ID=%d success", id);
+        return true;
+    }
 }
 
 /**
  * @brief 注册通信设备的回调函数
  */
-bool communicaManage::callbackRgist(int id,int pos ,int(*function)(int))
+bool communicaManage::callbackRgist(int id, int pos, int(*function)(int))
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	if (pos < 0 || pos > 2) return false;
-	struct communicateNode* temp = findcommunicate(id);
-	if (temp==NULL)
-	{
-		LOG_ERROR("comm_mgr", "%s", "No device found, callback register failed");
-		return false;
-	}
-	else
-	{
-		temp->com->reback[pos] = function;
-		LOG_INFO("comm_mgr", "Callback registered for device ID=%d pos=%d", id, pos);
-		return true;
-	}
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    if (pos < 0 || pos > 2) return false;
+    communicateNode* temp = findcommunicate(id);
+    if (temp == nullptr)
+    {
+        LOG_ERROR("comm_mgr", "%s", "No device found, callback register failed");
+        return false;
+    }
+    else
+    {
+        temp->com->reback[pos] = function;
+        LOG_INFO("comm_mgr", "Callback registered for device ID=%d pos=%d", id, pos);
+        return true;
+    }
 }
 
 /**
  * @brief 创建空通信节点（无 fd、无超时）
  */
-communicate * communicaManage::createComnode()
+std::unique_ptr<communicate> communicaManage::createComnode()
 {
-	communicate * com = new communicate;
-	com->fd = -1;
-	for (int i = 0; i < 3; i++)
-	{
-		com->reback[i] = NULL;
-	}
-	com->timecount = -1;
-	com->timeout = -1;
-	return com;
+    auto com = std::make_unique<communicate>();
+    com->fd = -1;
+    for (int i = 0; i < 3; i++)
+    {
+        com->reback[i] = nullptr;
+    }
+    com->timecount = -1;
+    com->timeout = -1;
+    return com;
 }
 
 /**
  * @brief 创建带 fd 的通信节点（无超时）
  */
-struct communicate* communicaManage::createComnode(int fd)
+std::unique_ptr<communicate> communicaManage::createComnode(int fd)
 {
-	communicate * com = new communicate;
-	com->fd = fd;
-	for (int i = 0; i < 3;i++)
-	{
-		com->reback[i] = NULL;
-	}
-	com->timecount = -1;
-	com->timeout = -1;
-	return com;
+    auto com = std::make_unique<communicate>();
+    com->fd = fd;
+    for (int i = 0; i < 3; i++)
+    {
+        com->reback[i] = nullptr;
+    }
+    com->timecount = -1;
+    com->timeout = -1;
+    return com;
 }
 
 /**
  * @brief 创建带 fd 和超时阈值的通信节点
  */
-struct communicate* communicaManage::createComnode(int fd,int timeout)
+std::unique_ptr<communicate> communicaManage::createComnode(int fd, int timeout)
 {
-	communicate * com = new communicate;
-	com->fd = fd;
-	for (int i = 0; i < 3; i++)
-	{
-		com->reback[i] = NULL;
-	}
-	com->timecount = -1;
-	com->timeout = timeout;
-	return com;
+    auto com = std::make_unique<communicate>();
+    com->fd = fd;
+    for (int i = 0; i < 3; i++)
+    {
+        com->reback[i] = nullptr;
+    }
+    com->timecount = -1;
+    com->timeout = timeout;
+    return com;
 }
 
 /**
@@ -326,10 +304,10 @@ struct communicate* communicaManage::createComnode(int fd,int timeout)
  */
 int communicaManage::getSingleFd(int id)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode* com=findcommunicate(id);
-	if (com == NULL)  return -1;
-	return com->com->fd;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* com = findcommunicate(id);
+    if (com == nullptr) return -1;
+    return com->com->fd;
 }
 
 /**
@@ -337,39 +315,39 @@ int communicaManage::getSingleFd(int id)
  */
 std::vector<int> communicaManage::getAllFd()
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	std::vector<int> result;
-	struct communicateNode * temp = communicateNode;
-	while (temp != NULL)
-	{
-		if (temp->com != NULL)
-			result.push_back(temp->com->fd);
-		temp = temp->next;
-	}
-	return result;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    std::vector<int> result;
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        if (temp->com != nullptr)
+            result.push_back(temp->com->fd);
+        temp = temp->next.get();
+    }
+    return result;
 }
 
 /**
  * @brief 获取所有设备的 ID 和 FD，按 ID 从小到大排序返回
  */
-std::vector<std::vector<int>>  communicaManage::getALLIfd()
+std::vector<std::vector<int>> communicaManage::getALLIfd()
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	std::vector<std::vector<int>> result;
-	std::vector<int> vec;
-	struct communicateNode * temp = communicateNode;
-	while (temp != NULL)
-	{
-		if (temp->com != NULL) {
-			vec.push_back(temp->id);
-			vec.push_back(temp->com->fd);
-			result.push_back(vec);
-			vec.clear();
-		}
-		temp = temp->next;
-	}
-	sort(result.begin(), result.end(), cmp);
-	return result;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    std::vector<std::vector<int>> result;
+    std::vector<int> vec;
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        if (temp->com != nullptr) {
+            vec.push_back(temp->id);
+            vec.push_back(temp->com->fd);
+            result.push_back(vec);
+            vec.clear();
+        }
+        temp = temp->next.get();
+    }
+    sort(result.begin(), result.end(), cmp);
+    return result;
 }
 
 /**
@@ -377,17 +355,17 @@ std::vector<std::vector<int>>  communicaManage::getALLIfd()
  */
 int communicaManage::getSuccessFd()
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode* temp = communicateNode;
-	while (temp!=NULL)
-	{
-		if (temp->enabled == true && temp->com != NULL)
-		{
-			return temp->com->fd;
-		}
-		temp = temp->next;
-	}
-	return -1;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        if (temp->enabled == true && temp->com != nullptr)
+        {
+            return temp->com->fd;
+        }
+        temp = temp->next.get();
+    }
+    return -1;
 }
 
 /**
@@ -395,17 +373,17 @@ int communicaManage::getSuccessFd()
  */
 int communicaManage::getSuccessId()
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode* temp = communicateNode;
-	while (temp!=NULL)
-	{
-		if (temp->enabled == true)
-		{
-			return temp->id;
-		}
-		temp = temp->next;
-	}
-	return -1;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        if (temp->enabled == true)
+        {
+            return temp->id;
+        }
+        temp = temp->next.get();
+    }
+    return -1;
 }
 
 /**
@@ -413,14 +391,14 @@ int communicaManage::getSuccessId()
  */
 bool communicaManage::setEnable(int id)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode* temp = NULL;
-	if ((temp=findcommunicate(id)) != NULL)
-	{
-		temp->enabled = true;
-		return true;
-	}
-	return false;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* temp = findcommunicate(id);
+    if (temp != nullptr)
+    {
+        temp->enabled = true;
+        return true;
+    }
+    return false;
 }
 
 /**
@@ -428,15 +406,15 @@ bool communicaManage::setEnable(int id)
  */
 int communicaManage::getSize()
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	int size=0;
-	struct communicateNode * temp= communicateNode;
-	while (temp != NULL)
-	{
-		size++;
-		temp = temp->next;
-	}
-	return size;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    int size = 0;
+    communicateNode* temp = head_.get();
+    while (temp != nullptr)
+    {
+        size++;
+        temp = temp->next.get();
+    }
+    return size;
 }
 
 /**
@@ -444,11 +422,11 @@ int communicaManage::getSize()
  */
 bool communicaManage::isExist(int id)
 {
-	std::lock_guard<std::recursive_mutex> lock(mtx_);
-	struct communicateNode * temp = communicateNode;
-	while (temp != NULL) {
-		if (temp->id == id) return true;
-		temp = temp->next;
-	}
-	return false;
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    communicateNode* temp = head_.get();
+    while (temp != nullptr) {
+        if (temp->id == id) return true;
+        temp = temp->next.get();
+    }
+    return false;
 }
