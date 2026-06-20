@@ -36,11 +36,11 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
     struct timeval  tval;
 
     if ((flags = fcntl(sockfd, F_GETFL, 0)) == -1) {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "fcntl F_GETFL: %s", strerror(errno));
+        LOG_ERROR("dev_init", "fcntl F_GETFL: %s", strerror(errno));
         return -1;
     }
     if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "fcntl F_SETFL: %s", strerror(errno));
+        LOG_ERROR("dev_init", "fcntl F_SETFL: %s", strerror(errno));
         return -1;
     }
 
@@ -66,7 +66,7 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
         return -1;
     }
     else if (n == -1) {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "select: %s", strerror(errno));
+        LOG_ERROR("dev_init", "select: %s", strerror(errno));
         return -1;
     }
 
@@ -77,13 +77,13 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
         }
     }
     else {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "%s", "select error: socket not set");
+        LOG_ERROR("dev_init", "%s", "select error: socket not set");
         return -1;
     }
 
 done:
     if (fcntl(sockfd, F_SETFL, flags) == -1) {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "fcntl: %s", strerror(errno));
+        LOG_ERROR("dev_init", "fcntl: %s", strerror(errno));
     }
 
     if (error) {
@@ -101,13 +101,13 @@ int lora_reinit(int old_fd)
     ctx.fds().lora = lora_open();
     if (ctx.fds().lora == -1)
     {
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "%s", "lora reinit failed");
+        LOG_ERROR("dev_init", "%s", "lora reinit failed");
         return -1;
     }
     else
     {
         ctx.identity().communicate_status[0] = '1';
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "%s", "lora reinit success");
+        LOG_INFO("dev_init", "%s", "lora reinit success");
         return ctx.fds().lora;
     }
 }
@@ -117,7 +117,7 @@ int wifi_reinit(int old_fd)
     auto& ctx = sap::DeviceContext::instance();
     close(old_fd);
     if (system("ifconfig wlan0 down") != 0)
-        sap::Logger::instance().log(sap::LogLevel::ERROR, "dev_init", "%s", "wifi_reinit: ifconfig wlan0 down failed");
+        LOG_ERROR("dev_init", "%s", "wifi_reinit: ifconfig wlan0 down failed");
     sleep(2);
     if (system("killall wpa_supplicant") != 0)
         LOG_ERROR("dev_init", "%s", "wifi_reinit: killall wpa_supplicant failed");
@@ -159,8 +159,8 @@ int wifi_reinit(int old_fd)
         }
         else
         {
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "%s", "wifi: connect server success");
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
+            LOG_INFO("dev_init", "%s", "wifi: connect server success");
+            LOG_INFO("dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
             ctx.fds().wifi = fd_wifi_sock;
             ctx.identity().communicate_status[1] = '1';
             system("echo 1 > /sys/class/leds/yellow/brightness");
@@ -182,7 +182,7 @@ int bt_reinit(int old_fd)
     }
     else
     {
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
+        LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
         ctx.identity().communicate_status[3] = '1';
         system("echo 1 > /sys/class/leds/green/brightness");
         return ctx.fds().bt;
@@ -210,7 +210,7 @@ int lan_reinit(int old_fd)
         lan_ser_addr.sin_family = AF_INET;
         lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
         lan_ser_addr.sin_port = htons(cfg_lan_port());
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
+        LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
         /* TODO: 此处使用阻塞connect，若对端不可达会长时间阻塞。建议后续改为 connect_nonb 非阻塞方式 */
         int lan_fd_connect = connect(ctx.fds().lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr));
         if (lan_fd_connect < 0)
@@ -222,8 +222,8 @@ int lan_reinit(int old_fd)
         else
         {
             int lan_fd = ctx.fds().lan;
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "%s", "lanship: connect server success");
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: Lan. Device descriptor = %d", lan_fd);
+            LOG_INFO("dev_init", "%s", "lanship: connect server success");
+            LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", lan_fd);
             ctx.identity().communicate_status[2] = '1';
             return lan_fd;
         }
@@ -246,7 +246,7 @@ int dev_init()
         ctx.fds().device_id.push_back(lora_fd);
         ctx.commManager().addCommunicateNode(LORA, lora_fd);
         ctx.commManager().callbackRgist(LORA, 0, lora_reinit);
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: lora. Device descriptor = %d", lora_fd);
+        LOG_INFO("dev_init", "Init success: lora. Device descriptor = %d", lora_fd);
         ctx.identity().communicate_status[0] = '1';
         system("echo 1 > /sys/class/leds/red/brightness");
     }
@@ -294,8 +294,8 @@ int dev_init()
         else
         {
 #ifdef DEBUG
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "%s", "wifi: connect server success");
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
+            LOG_INFO("dev_init", "%s", "wifi: connect server success");
+            LOG_INFO("dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
             ctx.fds().flag_wifi = 1;
 #endif
             ctx.fds().wifi = fd_wifi_sock;
@@ -319,7 +319,7 @@ int dev_init()
         ctx.commManager().callbackRgist(BT, 0, bt_reinit);
         ctx.fds().device_id.push_back(ctx.fds().bt);
 #ifdef DEBUG
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
+        LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
 #endif
         ctx.identity().communicate_status[3] = '1';
         system("echo 1 > /sys/class/leds/green/brightness");
@@ -357,7 +357,7 @@ int dev_init()
             }
         }
 #ifdef DEBUG
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: LanLSS. Device descriptor = %d", ctx.fds().lan_server);
+        LOG_INFO("dev_init", "Init success: LanLSS. Device descriptor = %d", ctx.fds().lan_server);
 #endif
     }
 
@@ -381,7 +381,7 @@ int dev_init()
         lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
         lan_ser_addr.sin_port = htons(cfg_lan_port());
 #ifdef DEBUG
-        sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
+        LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
 #endif
         /* TODO: 此处使用阻塞connect，若对端不可达会长时间阻塞。建议后续改为 connect_nonb 非阻塞方式 */
         int lan_fd_connect = connect(ctx.fds().lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr));
@@ -397,7 +397,7 @@ int dev_init()
         {
 #ifdef DEBUG
             LOG_INFO("dev_init", "%s", "lanISR: connect server success");
-            sap::Logger::instance().log(sap::LogLevel::INFO, "dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
+            LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
 #endif
             ctx.commManager().addCommunicateNode(LAN, ctx.fds().lan);
             ctx.commManager().callbackRgist(LAN, 0, lan_reinit);
