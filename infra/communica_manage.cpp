@@ -201,6 +201,7 @@ bool communicaManage::deletecommunicateNode(int id)
 
 /**
  * @brief 重新初始化指定通信设备
+ * @details 使用熔断器保护，防止连续失败时无限重试
  */
 bool communicaManage::reinit(int id, int para)
 {
@@ -211,6 +212,14 @@ bool communicaManage::reinit(int id, int para)
         LOG_ERROR("comm_mgr", "%s", "No device found, reinit failed");
         return false;
     }
+
+    // 熔断检查：如果熔断器打开，跳过重初始化
+    if (!temp->com->breaker.allowRequest()) {
+        LOG_WARN("comm_mgr", "Device ID=%d circuit breaker OPEN, skip reinit (failures=%d)",
+                 id, temp->com->breaker.failureCount());
+        return false;
+    }
+
     if (temp->com->reback[0] == nullptr) {
         LOG_ERROR("comm_mgr", "%s", "Reinit failed: no init callback registered");
         return false;
@@ -218,6 +227,17 @@ bool communicaManage::reinit(int id, int para)
     else
     {
         int fd = temp->com->reback[0](para);
+
+        // 重初始化失败，记录到熔断器
+        if (fd < 0) {
+            temp->com->breaker.recordFailure();
+            LOG_ERROR("comm_mgr", "Reinit device ID=%d failed, breaker failures=%d/%d",
+                      id, temp->com->breaker.failureCount(), temp->com->breaker.threshold());
+            return false;
+        }
+
+        // 重初始化成功，重置熔断器
+        temp->com->breaker.recordSuccess();
         auto func = temp->com->reback[0];  // 保存回调函数
         deletecommunicateNode(id);
         if (!addCommunicateNode(id, fd)) {

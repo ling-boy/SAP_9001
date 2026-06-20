@@ -65,7 +65,7 @@ public:
 
         if (state_ == CircuitState::Open) {
             // 检查冷却时间是否已过
-            if (getTickCount() - last_failure_time_ > cooldown_ms_) {
+            if (getTickCount() - last_failure_time_ > static_cast<uint64_t>(cooldown_ms_)) {
                 state_ = CircuitState::HalfOpen;
                 return true;
             }

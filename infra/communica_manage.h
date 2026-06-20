@@ -15,6 +15,7 @@
 #include <mutex>
 #include <memory>
 #include <functional>
+#include "infra/circuit_breaker.h"
 
 /** 通信设备最大支持数量 */
 #define communicatemax 4
@@ -33,6 +34,7 @@ struct communicate {
     std::function<int(int)> reback[3];
     int timecount;           /**< 生存计数器 */
     int timeout;             /**< 超时阈值，超过则判定连接中断并触发重初始化 */
+    sap::CircuitBreaker breaker;  /**< 熔断器，防止连续失败时无限重试 */
 };
 
 /**
