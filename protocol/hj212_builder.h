@@ -18,6 +18,7 @@
 #include "core/device_context.h"
 #include "protocol/hj212.h"
 #include "infra/get.h"
+#include "infra/logger.h"
 
 namespace sap {
 

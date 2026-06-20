@@ -16,13 +16,9 @@
 #include <memory>
 #include <functional>
 #include "infra/circuit_breaker.h"
-#include "infra/memory_pool.h"
 
 /** 通信设备最大支持数量 */
 #define communicatemax 4
-
-// 前向声明 communicaManage，供自定义 deleter 使用
-class communicaManage;
 
 /**
  * @brief 通信设备信息结构体
@@ -42,27 +38,11 @@ struct communicate {
 };
 
 /**
- * @brief 自定义 deleter：将 communicate 对象归还到内存池
- */
-struct CommunicateDeleter {
-    sap::MemoryPool<communicate, communicatemax>* pool = nullptr;
-
-    void operator()(communicate* ptr) const {
-        if (pool && ptr) {
-            pool->deallocate(ptr);
-        }
-    }
-};
-
-/** @brief 使用内存池管理的 communicate 智能指针类型 */
-using CommunicatePtr = std::unique_ptr<communicate, CommunicateDeleter>;
-
-/**
  * @brief 通信设备链表节点结构体
  * @details 使用智能指针管理内存，自动释放
  */
 struct communicateNode {
-    CommunicatePtr com;    /**< 通信设备信息（内存池管理） */
+    std::unique_ptr<communicate> com;    /**< 通信设备信息（智能指针管理） */
     int id;                              /**< 设备ID（0=LoRa, 1=WiFi, 2=蓝牙, 3=LAN） */
     bool enabled;                        /**< 使能位，标识是否注册成功 */
     std::unique_ptr<communicateNode> next; /**< 指向下一个节点（智能指针管理） */
@@ -200,29 +180,26 @@ private:
      */
     communicateNode* findcommunicate(int id);
 
-    /** @brief 创建空通信节点（无fd、无超时）- 使用内存池分配 */
-    CommunicatePtr createComnode();
+    /** @brief 创建空通信节点（无fd、无超时） */
+    std::unique_ptr<communicate> createComnode();
 
     /**
-     * @brief 创建带fd的通信节点（无超时）- 使用内存池分配
+     * @brief 创建带fd的通信节点（无超时）
      * @param fd 设备文件描述符
      */
-    CommunicatePtr createComnode(int fd);
+    std::unique_ptr<communicate> createComnode(int fd);
 
     /**
-     * @brief 创建带fd和超时阈值的通信节点 - 使用内存池分配
+     * @brief 创建带fd和超时阈值的通信节点
      * @param fd      设备文件描述符
      * @param timeout 超时阈值
      */
-    CommunicatePtr createComnode(int fd, int timeout);
+    std::unique_ptr<communicate> createComnode(int fd, int timeout);
 
     /** @brief 排序比较函数，用于按ID从小到大排序 */
     static bool cmp(const std::vector<int>& a, const std::vector<int>& b);
 
     /** @brief 互斥锁，保护链表操作的线程安全 */
     std::recursive_mutex mtx_;
-
-    /** @brief communicate 结构体内存池（最多4个设备） */
-    sap::MemoryPool<communicate, 4> comm_pool_;
 };
 #endif
