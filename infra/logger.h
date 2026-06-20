@@ -213,7 +213,33 @@ private:
 
 // ============================================================================
 // 便捷宏：自动填充模块名
+// 注意：syslog.h 定义了 LOG_INFO/LOG_ERR 等宏，需要先 undef 避免冲突
 // ============================================================================
+
+#ifdef LOG_TRACE
+#undef LOG_TRACE
+#endif
+#ifdef LOG_DEBUG
+#undef LOG_DEBUG
+#endif
+#ifdef LOG_INFO
+#undef LOG_INFO
+#endif
+#ifdef LOG_WARNING
+#undef LOG_WARNING
+#endif
+#ifdef LOG_WARN
+#undef LOG_WARN
+#endif
+#ifdef LOG_ERR
+#undef LOG_ERR
+#endif
+#ifdef LOG_ERROR
+#undef LOG_ERROR
+#endif
+#ifdef LOG_FATAL
+#undef LOG_FATAL
+#endif
 
 #define LOG_TRACE(module, fmt, ...) sap::Logger::instance().log(sap::LogLevel::TRACE, module, fmt, ##__VA_ARGS__)
 #define LOG_DEBUG(module, fmt, ...) sap::Logger::instance().log(sap::LogLevel::DEBUG, module, fmt, ##__VA_ARGS__)

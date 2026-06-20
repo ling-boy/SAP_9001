@@ -34,7 +34,7 @@ int cell4g_detect(char* net_name);
  * @param remote_port 远程服务器端口号
  * @return 成功返回套接字fd，失败返回-1
  */
-int cell4g_ip_port_check(char* remote_ip, int remote_port);
+int cell4g_ip_port_check(const char* remote_ip, int remote_port);
 
 /**
  * @brief 打开4G模块并连接到指定服务器

@@ -1,5 +1,6 @@
 #include "protocol/protocol_process.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 #include <vector>
 #include <time.h>
 #include <sys/time.h>
@@ -31,7 +32,7 @@ extern int fd_lora;
 #define TIME_SEND               "20"
 #define REQ_ACC_HEART           "EF"
 #define REQ_GATE_HEART          "FF"
-#define STOREFILEPATHNAME       "/home/root/storefile.txt"
+#define STOREFILEPATHNAME       CFG_STR("data", "store_file", "/home/root/storefile.txt").c_str()
 
 /** @brief 全局停止标志位，由信号处理器设置，主循环中检测 */
 extern volatile sig_atomic_t g_stop_flag;

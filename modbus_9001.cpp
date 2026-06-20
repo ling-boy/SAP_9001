@@ -39,8 +39,8 @@
 #include "infra/logger.h"
 #include "infra/config.h"
 
-#define watchPathName "/home/root/myWatch.txt"
-const int softdogTimeout = 30;
+#define watchPathName CFG_STR("watchdog", "pid_file", "/home/root/myWatch.txt").c_str()
+extern const int softdogTimeout = 30;
 
 /* 通信设备文件描述符 */
 int fd_lora = -1, fd_wifi = -1, fd_bt = -1, fd_lan = -1, fdL_lan = -1;
@@ -118,6 +118,13 @@ int main()
     sap::Logger::instance().setLevel(sap::LogLevel::DEBUG);
     LOG_INFO("main", "SAP_9001 V2.1 starting...");
 
+    /* 加载配置文件 */
+    if (!sap::Config::instance().load("./config/device.conf")) {
+        LOG_WARN("main", "Config file not found, using defaults");
+    } else {
+        LOG_INFO("main", "Config loaded from ./config/device.conf");
+    }
+
     /* 注册信号处理函数，确保被 kill 时能持久化数据 */
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -138,7 +145,9 @@ int main()
         /* 保持 g_fdWatch 打开，信号处理器会 lseek 到开头后写入 "0" */
     }
 
-    system("./power_12v.sh on");
+    std::string power_script = CFG_STR("paths", "power_script", "./power_12v.sh");
+    std::string power_on_cmd = power_script + " on";
+    system(power_on_cmd.c_str());
     sleep(1);
     CSoftwareWdt softwareWdt;
     CSoftwareWdt* g_CsoftwareWdt = &softwareWdt;
@@ -155,7 +164,9 @@ int main()
         system("echo 0 > /sys/class/leds/red/brightness");
         system("echo 0 > /sys/class/leds/yellow/brightness");
         system("echo 0 > /sys/class/leds/green/brightness");
-        system("/home/root/power_12v.sh off");
+        std::string power_script = CFG_STR("paths", "power_script", "./power_12v.sh");
+        std::string power_off_cmd = power_script + " off";
+        system(power_off_cmd.c_str());
         system("hwclock -w");
         system("killall wpa_supplicant");
         sleep(1);

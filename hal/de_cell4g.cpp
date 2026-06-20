@@ -8,6 +8,7 @@
 #include <net/if.h>
 #include "hal/de_cell4g.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 
 /**
  * @brief 初始化4G模块，通过PPP拨号建立蜂窝网络连接
@@ -28,7 +29,9 @@ int hard4g_init(char *net_name)
         while (retry_count-- && success)
         {
                 /* 启动PPP拨号脚本，后台运行连接到vnet.mobi网络 */
-                system("/home/root/g2020/mokuai/4g/ppp/ppp/quectel-pppd.sh /dev/ttyUSB5 \"\" \"\" vnet.mobi &");
+                std::string pppd_script = CFG_STR("network.cell4g", "pppd_script", "/home/root/g2020/mokuai/4g/ppp/ppp/quectel-pppd.sh");
+                std::string pppd_cmd = pppd_script + " /dev/ttyUSB5 \"\" \"\" vnet.mobi &";
+                system(pppd_cmd.c_str());
                 /* PPP协商需要较长时间，等待8秒确保拨号完成 */
                 sleep(8);
                 if (cell4g_detect(net_name) == 0)
@@ -40,7 +43,8 @@ int hard4g_init(char *net_name)
         else
         {
                 /* 所有重试失败，杀死PPP进程释放资源 */
-                system("/home/root/g2020/mokuai/4g/ppp/ppp/quectel-ppp-kill");
+                std::string pppd_kill = CFG_STR("network.cell4g", "pppd_kill", "/home/root/g2020/mokuai/4g/ppp/ppp/quectel-ppp-kill");
+                system(pppd_kill.c_str());
                 return -1;
         }
 }
@@ -121,7 +125,7 @@ int cell4g_detect(char *net_name)
  * @return >0  连接成功，返回套接字文件描述符
  * @return -1  连接失败
  */
-int cell4g_ip_port_check(char *remote_ip, int remote_port)
+int cell4g_ip_port_check(const char *remote_ip, int remote_port)
 {
         int sockfd;
 
@@ -182,5 +186,7 @@ int cell4g_open()
         if (hard4g_init("ppp0") == -1)
                 return -1;
 
-        return cell4g_ip_port_check("106.52.84.156", 8888);
+        std::string server_ip = CFG_STR("network.cell4g", "server_ip", "106.52.84.156");
+        int server_port = CFG_INT("network.cell4g", "server_port", 8888);
+        return cell4g_ip_port_check(server_ip.c_str(), server_port);
 }

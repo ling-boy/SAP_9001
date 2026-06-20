@@ -123,7 +123,7 @@ public:
      */
     int getInt(const std::string& section, const std::string& key,
                int defaultVal = 0) const {
-        std::string val = getString(section, key);
+        std::string val = getString(section, key, "");
         if (val.empty()) return defaultVal;
         try {
             return std::stoi(val);
@@ -138,7 +138,7 @@ public:
      * @param defaultVal 默认值
      * @note 最后一个 '.' 分隔 section 和 key
      */
-    std::string getString(const std::string& dottedKey,
+    std::string getStringDotted(const std::string& dottedKey,
                           const std::string& defaultVal = "") const {
         std::string section, key;
         if (!splitDottedKey(dottedKey, section, key)) {
@@ -150,7 +150,7 @@ public:
     /**
      * @brief 使用点分格式获取整数配置值
      */
-    int getInt(const std::string& dottedKey, int defaultVal = 0) const {
+    int getIntDotted(const std::string& dottedKey, int defaultVal = 0) const {
         std::string section, key;
         if (!splitDottedKey(dottedKey, section, key)) {
             return defaultVal;
@@ -242,13 +242,13 @@ private:
  * @example CFG_STR_DOT("network.wifi.server_ip", "192.168.3.1")
  */
 #define CFG_STR_DOT(dottedKey, ...) \
-    sap::Config::instance().getString(dottedKey, ##__VA_ARGS__)
+    sap::Config::instance().getStringDotted(dottedKey, ##__VA_ARGS__)
 
 /**
  * @brief 使用点分格式获取整数配置
  * @example CFG_INT_DOT("network.wifi.server_port", 1234)
  */
 #define CFG_INT_DOT(dottedKey, ...) \
-    sap::Config::instance().getInt(dottedKey, ##__VA_ARGS__)
+    sap::Config::instance().getIntDotted(dottedKey, ##__VA_ARGS__)
 
 } // namespace sap

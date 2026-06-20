@@ -8,6 +8,7 @@
 #include "hal/bluetooth.h"
 #include "infra/communica_manage.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 #include <cstdlib>
 #include <stdio.h>
 #include <unistd.h>
@@ -127,7 +128,9 @@ int wifi_reinit(int old_fd)
     if (system("killall udhcpc") != 0)
         LOG_ERROR("dev_init", "wifi_reinit: killall udhcpc failed");
     sleep(1);
-    if (system("wpa_supplicant -i wlan0 -B -c /home/root/wifi.conf &") != 0)
+    std::string wifi_conf = CFG_STR("paths", "wifi_conf", "/home/root/wifi.conf");
+    std::string wpa_cmd = "wpa_supplicant -i wlan0 -B -c " + wifi_conf + " &";
+    if (system(wpa_cmd.c_str()) != 0)
         LOG_ERROR("dev_init", "wifi_reinit: wpa_supplicant start failed");
     sleep(10);
     if (system("udhcpc -i wlan0 -t 8 -n") != 0)
@@ -143,10 +146,10 @@ int wifi_reinit(int old_fd)
         LOG_INFO("dev_init", "wifi: socket create success");
         memset(&wifi_ser_addr, 0x0, sizeof(struct sockaddr_in));
         wifi_ser_addr.sin_family = AF_INET;
-        wifi_ser_addr.sin_port = htons(WIFI_SERVER_PORT);
-        wifi_ser_addr.sin_addr.s_addr = inet_addr(WIFI_SERVER_IP);
+        wifi_ser_addr.sin_port = htons(cfg_wifi_port());
+        wifi_ser_addr.sin_addr.s_addr = inet_addr(cfg_wifi_ip().c_str());
         int wifi_fd_connect;
-        wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), CONNECT_TIMEOUT_SEC);
+        wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), cfg_connect_timeout());
         if (wifi_fd_connect < 0)
         {
             LOG_ERROR("dev_init", "wifi: connect: %s", strerror(errno));
@@ -190,7 +193,9 @@ int bt_reinit(int old_fd)
 int lan_reinit(int old_fd)
 {
     close(old_fd);
-    system("ifconfig eth1 192.168.2.235 netmask 255.255.255.0");
+    std::string eth1_ip = CFG_STR("network.lan", "local_ip", "192.168.2.235");
+    std::string ifconfig_cmd = "ifconfig eth1 " + eth1_ip + " netmask 255.255.255.0";
+    system(ifconfig_cmd.c_str());
     sleep(2);
     fd_lan = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_lan < 0)
@@ -202,8 +207,8 @@ int lan_reinit(int old_fd)
     {
         memset(&lan_ser_addr, 0, sizeof(lan_ser_addr));
         lan_ser_addr.sin_family = AF_INET;
-        lan_ser_addr.sin_addr.s_addr = inet_addr(LAN_SERVER_IP);
-        lan_ser_addr.sin_port = htons(LAN_SERVER_PORT);
+        lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
+        lan_ser_addr.sin_port = htons(cfg_lan_port());
         LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", fd_lan);
         /* TODO: 此处使用阻塞connect，若对端不可达会长时间阻塞。建议后续改为 connect_nonb 非阻塞方式 */
         int lan_fd_connect = connect(fd_lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr));
@@ -248,7 +253,9 @@ int dev_init()
     sleep(1);
     system("killall udhcpc");
     sleep(1);
-    system("wpa_supplicant -i wlan0 -B -c /home/root/wifi.conf &");
+    std::string wifi_conf = CFG_STR("paths", "wifi_conf", "/home/root/wifi.conf");
+    std::string wpa_cmd = "wpa_supplicant -i wlan0 -B -c " + wifi_conf + " &";
+    system(wpa_cmd.c_str());
     sleep(10);
     system("udhcpc -i wlan0 -t 8 -n");
     sleep(5);
@@ -267,10 +274,10 @@ int dev_init()
 #endif
         memset(&wifi_ser_addr, 0x0, sizeof(struct sockaddr_in));
         wifi_ser_addr.sin_family = AF_INET;
-        wifi_ser_addr.sin_port = htons(WIFI_SERVER_PORT);
-        wifi_ser_addr.sin_addr.s_addr = inet_addr(WIFI_SERVER_IP);
+        wifi_ser_addr.sin_port = htons(cfg_wifi_port());
+        wifi_ser_addr.sin_addr.s_addr = inet_addr(cfg_wifi_ip().c_str());
         int wifi_fd_connect;
-        wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), CONNECT_TIMEOUT_SEC);
+        wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), cfg_connect_timeout());
         if (wifi_fd_connect < 0)
         {
 #ifdef DEBUG
@@ -315,7 +322,9 @@ int dev_init()
     sleep(2);
 
     // 初始化网口1作为服务器端口，接收其他节点数据
-    system("ifconfig eth0 192.168.31.101 netmask 255.255.255.0");
+    std::string eth0_ip = CFG_STR("network.lan", "zd_local_ip", "192.168.31.101");
+    std::string ifconfig_eth0 = "ifconfig eth0 " + eth0_ip + " netmask 255.255.255.0";
+    system(ifconfig_eth0.c_str());
     sleep(2);
     fdL_lan = socket(AF_INET, SOCK_STREAM, 0);
     if (fdL_lan < 0)
@@ -328,8 +337,8 @@ int dev_init()
     {
         memset(&Llan_ser_addr, 0, sizeof(Llan_ser_addr));
         Llan_ser_addr.sin_family = AF_INET;
-        Llan_ser_addr.sin_addr.s_addr = inet_addr(ZD_LAN_SERVER_IP);
-        Llan_ser_addr.sin_port = htons(ZD_LAN_SERVER_PORT);
+        Llan_ser_addr.sin_addr.s_addr = inet_addr(cfg_zd_lan_ip().c_str());
+        Llan_ser_addr.sin_port = htons(cfg_zd_lan_port());
         if (bind(fdL_lan, (struct sockaddr*)&Llan_ser_addr, sizeof(Llan_ser_addr)) < 0) {
             LOG_ERROR("dev_init", "bind fdL_lan failed: %s", strerror(errno));
             close(fdL_lan);
@@ -347,7 +356,9 @@ int dev_init()
     }
 
     // 初始化网口2作为客户端，与ISR进行有线注册连接
-    system("ifconfig eth1 192.168.2.235 netmask 255.255.255.0");
+    std::string eth1_ip = CFG_STR("network.lan", "local_ip", "192.168.2.235");
+    std::string ifconfig_cmd = "ifconfig eth1 " + eth1_ip + " netmask 255.255.255.0";
+    system(ifconfig_cmd.c_str());
     sleep(2);
     fd_lan = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_lan < 0)
@@ -360,8 +371,8 @@ int dev_init()
     {
         memset(&lan_ser_addr, 0, sizeof(lan_ser_addr));
         lan_ser_addr.sin_family = AF_INET;
-        lan_ser_addr.sin_addr.s_addr = inet_addr(LAN_SERVER_IP);
-        lan_ser_addr.sin_port = htons(LAN_SERVER_PORT);
+        lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
+        lan_ser_addr.sin_port = htons(cfg_lan_port());
 #ifdef DEBUG
         LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", fd_lan);
 #endif
@@ -397,7 +408,8 @@ int dev_init()
 
 void get_mac()
 {
-    FILE* fp = fopen("./mac.txt", "r");
+    std::string mac_file = CFG_STR("data", "mac_file", "./mac.txt");
+    FILE* fp = fopen(mac_file.c_str(), "r");
     if (fp == NULL)
     {
         LOG_ERROR("dev_init", "get mac failed");

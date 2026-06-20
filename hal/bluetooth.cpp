@@ -8,6 +8,7 @@
 #include "hal/bluetooth.h"
 #include "hal/usbctl.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 
 
 /**
@@ -95,13 +96,15 @@ int bluetooth_open(std::string &device_mac)
         }
         FD_SET(fd,&fdset);
         /* jd_open.sh: 拉低switch管脚，蓝牙模块进入AT命令模式 */
-        system("/home/root/jd_open.sh");
+        std::string bt_open = CFG_STR("paths", "bt_open_script", "/home/root/jd_open.sh");
+        system(bt_open.c_str());
         sleep(1);
         if (write_port(fd, DISCONNECT, strlen((const char*)DISCONNECT)) < 0) {
             LOG_WARN("bluetooth", "write DISCONNECT failed");
         }
         /* jd_close.sh: 拉高switch管脚，蓝牙模块退出AT命令模式 */
-        system("/home/root/jd_close.sh");
+        std::string bt_close = CFG_STR("paths", "bt_close_script", "/home/root/jd_close.sh");
+        system(bt_close.c_str());
         /* 发送重启指令，等待模块复位完成 */
         if (write_port(fd, (const char*)RST, strlen((const char*)RST)) < 0) {
             LOG_WARN("bluetooth", "write RST failed");

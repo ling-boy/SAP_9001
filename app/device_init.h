@@ -2,6 +2,7 @@
  * @file device_init.h
  * @brief 设备初始化模块接口
  * @details 提供通信设备初始化、重初始化、MAC读取等功能
+ *          网络配置已移至 config/device.conf，通过 ConfigManager 读取
  */
 #pragma once
 #ifndef _DEVICE_INIT_H_
@@ -10,15 +11,16 @@
 #include <sys/socket.h>
 #include <string>
 #include <vector>
+#include "infra/config.h"
 
-/** @brief 网络配置常量 */
-#define WIFI_SERVER_IP   "192.168.3.1"
-#define WIFI_SERVER_PORT 1234
-#define LAN_SERVER_IP    "192.168.2.1"
-#define LAN_SERVER_PORT  2234
-#define ZD_LAN_SERVER_IP   "192.168.31.101"
-#define ZD_LAN_SERVER_PORT 3234
-#define CONNECT_TIMEOUT_SEC  3
+/** @brief 网络配置常量（从配置文件读取，带默认值兜底） */
+inline std::string cfg_wifi_ip()   { return CFG_STR("network.wifi", "server_ip", "192.168.3.1"); }
+inline int          cfg_wifi_port(){ return CFG_INT("network.wifi", "server_port", 1234); }
+inline std::string cfg_lan_ip()    { return CFG_STR("network.lan", "server_ip", "192.168.2.1"); }
+inline int          cfg_lan_port() { return CFG_INT("network.lan", "server_port", 2234); }
+inline std::string cfg_zd_lan_ip() { return CFG_STR("network.lan", "zd_server_ip", "192.168.31.101"); }
+inline int          cfg_zd_lan_port(){ return CFG_INT("network.lan", "zd_server_port", 3234); }
+inline int          cfg_connect_timeout(){ return CFG_INT("timeouts", "connect_sec", 3); }
 
 /**
  * @brief 程序退出处理函数，执行硬件资源清理

@@ -7,6 +7,7 @@
 #include "hal/gps.h"
 #include "hal/usbctl.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -67,19 +68,21 @@ void* GET_GPS(void* arg)
 {
     (void)arg;
     LOG_INFO("gps", "Start GPS thread");
-    if (system("/home/root/gps_test.sh &") < 0) {
+    std::string gps_script = CFG_STR("paths", "gps_script", "/home/root/gps_test.sh");
+    std::string gps_cmd = gps_script + " &";
+    if (system(gps_cmd.c_str()) < 0) {
         LOG_WARN("gps", "system() failed to launch gps_test.sh");
     }
     sleep(60);
     int ret;
-    uint8_t dev[] = "/dev/ttymxc7";
+    std::string gps_port = CFG_STR("serial.gps", "port", "/dev/ttymxc7");
     char buf[300] = {0};
     char f_lat[5];
     char f_lon[5];
     char lat[10];
     char lon[12];
     int fd;
-    fd = open((const char*)dev, O_RDWR | O_NOCTTY);
+    fd = open(gps_port.c_str(), O_RDWR | O_NOCTTY);
     if (-1 == fd)
     {
         LOG_ERROR("gps", "Open GPS device error!");
