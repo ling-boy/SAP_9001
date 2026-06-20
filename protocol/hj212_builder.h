@@ -145,8 +145,8 @@ public:
         else if (num == 2) len_str = "00" + len_str;
         else if (num == 3) len_str = "0" + len_str;
 
-        // 组装协议包
-        char packet[1024] = {0};
+        // 组装协议包（使用 2048 字节栈缓冲区，避免堆分配）
+        char packet[2048] = {0};
         int needed = snprintf(packet, sizeof(packet),
             "$06%s%s%s00%s%s%s%s%s%s%s%s@",
             communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
@@ -156,16 +156,7 @@ public:
 
         if (needed < 0) return "";
         if (needed >= (int)sizeof(packet)) {
-            char* big_buf = new char[needed + 1];
-            snprintf(big_buf, needed + 1,
-                "$06%s%s%s00%s%s%s%s%s%s%s%s@",
-                communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
-                len_str.c_str(), isr_mac_.c_str(), mac_.c_str(),
-                port_info_.c_str(), gps_.c_str(), cpu_mem_.c_str(),
-                comm_status_.c_str(), data_.c_str());
-            std::string result(big_buf);
-            delete[] big_buf;
-            return result;
+            LOG_ERROR("hj212", "Packet too large (%d bytes), truncating", needed);
         }
         return std::string(packet);
     }

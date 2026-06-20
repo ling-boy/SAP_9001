@@ -34,9 +34,10 @@ std::string ensureLen_4(int param)
 
 std::string ensure_crc4_packet(unsigned int crc, const std::string& len_str, const std::string& data)
 {
-    int total_len = 2 + len_str.length() + data.length() + 4 + 1;
-    if (total_len <= 0) return "";
-    char* buf = new char[total_len];
+    // 使用栈缓冲区替代堆分配，避免 new/delete 碎片
+    char buf[512];
+    int total_len = sizeof(buf);
+
     if (crc > 4095)
         snprintf(buf, total_len, "##%s%s%x", len_str.c_str(), data.c_str(), crc);
     else if (crc > 255)
@@ -45,9 +46,8 @@ std::string ensure_crc4_packet(unsigned int crc, const std::string& len_str, con
         snprintf(buf, total_len, "##%s%s00%x", len_str.c_str(), data.c_str(), crc);
     else
         snprintf(buf, total_len, "##%s%s000%x", len_str.c_str(), data.c_str(), crc);
-    std::string result(buf);
-    delete[] buf;
-    return result;
+
+    return std::string(buf);
 }
 
 unsigned int CRC16_Checkout(unsigned char* puchMsg, unsigned int usDataLen)
