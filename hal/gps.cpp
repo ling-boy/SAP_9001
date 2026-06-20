@@ -1,0 +1,185 @@
+/**
+ * @file gps.cpp
+ * @brief GPS 数据采集模块
+ * @details 通过串口 /dev/ttymxc7 读取 NMEA $GNRMC 语句，
+ *          解析经纬度信息，提供线程安全的访问接口
+ */
+#include "hal/gps.h"
+#include "hal/usbctl.h"
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <fcntl.h>
+#include <iostream>
+#include <mutex>
+using namespace std;
+
+/* GPS 数据内部存储（模块私有） */
+static string s_gps_lat = "NFFFF";
+static string s_gps_lon = "EFFFFF";
+static mutex s_mutex_gps;
+
+/**
+ * @brief 解析GPS数据，提取经纬度信息
+ * @param line      GPS原始数据字符串
+ * @param lat       存储纬度信息
+ * @param flag_lat  存储纬度标志（N/S）
+ * @param lon       存储经度信息
+ * @param flag_lon  存储经度标志（E/W）
+ * @return 0 成功，-1 失败
+ */
+static int process_gps(char* line, char* lat, int lat_size, char* flag_lat, int flag_lat_size,
+                       char* lon, int lon_size, char* flag_lon, int flag_lon_size)
+{
+    char* token;
+    token = strtok(line, ",");
+    if (token == NULL) return -1;
+    /* 跳过时间字段，检查状态字段：V=无效定位 */
+    char* time_field = strtok(NULL, ",");
+    char* status = strtok(NULL, ",");
+    if (status != NULL && status[0] == 'V')
+    {
+        return -1;
+    }
+    /* 继续解析经纬度字段（strtok 已消耗 $GNRMC, time, status 三个字段） */
+    if (token != NULL && !strcmp(token, "$GNRMC"))
+    {
+        char* latitude = strtok(NULL, ",");   // 纬度
+        char* ns_flag = strtok(NULL, ",");    // N/S 标志
+        char* longitude = strtok(NULL, ",");  // 经度
+        char* ew_flag = strtok(NULL, ",");    // E/W 标志
+        if (latitude == NULL || ns_flag == NULL || longitude == NULL || ew_flag == NULL) return -1;
+        strncpy(lat, latitude, lat_size - 1); lat[lat_size - 1] = '\0';
+        strncpy(flag_lat, ns_flag, flag_lat_size - 1); flag_lat[flag_lat_size - 1] = '\0';
+        strncpy(lon, longitude, lon_size - 1); lon[lon_size - 1] = '\0';
+        strncpy(flag_lon, ew_flag, flag_lon_size - 1); flag_lon[flag_lon_size - 1] = '\0';
+    }
+    else {
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief GPS数据获取线程
+ */
+void* GET_GPS(void* arg)
+{
+#ifdef DEBUG
+    cout << "Start thread: GET_GPS()" << endl;
+#endif
+    if (system("/home/root/gps_test.sh &") < 0) {
+        printf("Warning: system() failed to launch gps_test.sh\n");
+    }
+    sleep(60);
+    int ret;
+    uint8_t dev[] = "/dev/ttymxc7";
+    char buf[300] = {0};
+    char f_lat[5];
+    char f_lon[5];
+    char lat[10];
+    char lon[12];
+    int fd;
+    fd = open((const char*)dev, O_RDWR | O_NOCTTY);
+    if (-1 == fd)
+    {
+#ifdef DEBUG
+        cout << "Open GPS device error!" << endl;
+#endif
+    }
+    else {
+#ifdef DEBUG
+        cout << "Open GPS device success!" << endl;
+#endif
+        ret = set_opt1(fd, 9600, 8, 'n', 1);
+        if (ret < 0) {
+            fprintf(stderr, "GPS: set_opt1 failed\n");
+            close(fd);
+            return NULL;
+        }
+        int flag = 0;
+        char in;
+        int i = 0;
+        int flag_read = 0;
+        while (1)
+        {
+            while (1)
+            {
+                ssize_t n = read(fd, &in, 1);
+                if (n <= 0) break;
+                if (in != '$')
+                {
+                    if (0 == flag_read) continue;
+                    else if (in == '\n' || in == '*')
+                    {
+                        buf[i] = '\0';
+                        flag_read = 0;
+                        i = 0;
+                        break;
+                    }
+                    else if (flag_read == 1 && in != '\n' && i < (int)sizeof(buf) - 1) buf[i++] = in;
+                }
+                else if (in == '$' && flag_read == 0)
+                {
+                    flag_read = 1;
+                    i = 0;
+                    buf[i++] = in;
+                }
+            }
+            /* 未读到完整行（read失败或中途断开），跳过解析 */
+            if (flag_read == 1) {
+                flag_read = 0;
+                i = 0;
+                memset(buf, 0, sizeof(buf));
+                sleep(2);
+                continue;
+            }
+            flag = process_gps(buf, lat, sizeof(lat), f_lat, sizeof(f_lat), lon, sizeof(lon), f_lon, sizeof(f_lon));
+            if (-1 == flag)
+            {
+                continue;
+            }
+            else {
+                int lat_len = strlen(lat);
+                int lon_len = strlen(lon);
+                string s_lon = "";
+                for (int j = 0; j < lon_len; j++) {
+                    if (j == 5) continue; /* 跳过小数点 */
+                    s_lon += lon[j];
+                }
+                string s_lat = "";
+                for (int j = 0; j < lat_len; j++) {
+                    if (j == 4) continue; /* 跳过小数点 */
+                    s_lat += lat[j];
+                }
+
+                {
+                    lock_guard<mutex> lock(s_mutex_gps);
+                    s_gps_lat = string(f_lat) + s_lat;
+                    s_gps_lon = string(f_lon) + s_lon;
+                }
+            }
+            memset(buf, 0, sizeof(buf));
+            sleep(2);
+        }
+    }
+    return NULL;
+}
+
+string gps_get_latitude()
+{
+    lock_guard<mutex> lock(s_mutex_gps);
+    return s_gps_lat;
+}
+
+string gps_get_longitude()
+{
+    lock_guard<mutex> lock(s_mutex_gps);
+    return s_gps_lon;
+}
+
+string gps_get_location()
+{
+    lock_guard<mutex> lock(s_mutex_gps);
+    return s_gps_lat + s_gps_lon;
+}

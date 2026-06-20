@@ -1,0 +1,22 @@
+﻿{
+  "version": 3,
+  "configurePresets": [
+    {
+      "name": "linux-arm-debug",
+      "displayName": "Linux ARM Debug",
+      "description": "Build for ARM target using the Linaro toolchain.",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "toolchainFile": "${sourceDir}/arm.toolchain.cmake"
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-arm-debug",
+      "configurePreset": "linux-arm-debug"
+    }
+  ]
+}
