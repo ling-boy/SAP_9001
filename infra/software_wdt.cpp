@@ -1,5 +1,6 @@
 #include "infra/software_wdt.h"
 #include "infra/logger.h"
+#include "core/device_context.h"
 
 /**
  * @brief 构造函数，初始化看门狗数组
@@ -114,9 +115,10 @@ int CSoftwareWdt::MontiorWdtRunState()
 					LOG_WARN("wdt", "Wdt ID=%d timeout, count=%d, name=%s",
 						bId, m_wWdtCount[bId], m_wwdtName[bId].c_str());
 					if(m_wwdtName[bId] == "trans_message"){
-						if (tid_transMessage == 0) continue;
-						int status = pthread_kill(tid_transMessage, 0);
-						if(status == EINVAL) LOG_ERROR("wdt", "pthread_kill EINVAL");
+						pthread_t tid_trans = sap::DeviceContext::instance().threads().trans_message;
+						if (tid_trans == 0) continue;
+						int status = pthread_kill(tid_trans, 0);
+						if(status == EINVAL) LOG_ERROR("wdt", "%s", "pthread_kill EINVAL");
 						timeout_detected = true;
 						trans_alive = (status == 0);
 						/* 释放所有已注册的看门狗ID */
@@ -135,11 +137,12 @@ int CSoftwareWdt::MontiorWdtRunState()
 	}
 	/* 第二阶段：锁外执行 pthread_cancel + pthread_join，避免死锁 */
 	if (timeout_detected) {
-		cancelAndJoin(tid_getSensor, "getSensor");
-		cancelAndJoin(tid_getLan, "getLan");
-		cancelAndJoin(tid_gps, "gps");
+		auto& threads = sap::DeviceContext::instance().threads();
+		cancelAndJoin(threads.get_sensor, "getSensor");
+		cancelAndJoin(threads.get_lan, "getLan");
+		cancelAndJoin(threads.gps, "gps");
 		if (trans_alive) {
-			cancelAndJoin(tid_transMessage, "transMessage");
+			cancelAndJoin(threads.trans_message, "transMessage");
 		}
 		return -1;
 	}
@@ -156,7 +159,7 @@ void* softwarewd(void* arg)
 	for(;;)
 	{
 		if(g_CsoftwareWdt->MontiorWdtRunState() == -1) {
-			LOG_FATAL("wdt", "Thread timeout detected, watchdog exiting");
+			LOG_FATAL("wdt", "%s", "Thread timeout detected, watchdog exiting");
 			return NULL;
 		}
 		sleep(4);

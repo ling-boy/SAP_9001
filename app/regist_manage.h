@@ -65,10 +65,7 @@
 /** 时间戳下发 */
 #define TIME_SEND               "20"
 
-extern std::string  id, net_id, mac, cpu_occupy, Isr_mac, current_time;
-extern char communicate_status[];
-extern int monitor_time;
-extern communicaManage* CM;
+/* 所有全局状态已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance() 访问 */
 
 /**
  * @brief 设备注册线程参数结构体

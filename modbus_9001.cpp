@@ -38,39 +38,15 @@
 #include "infra/message_queue.h"
 #include "infra/logger.h"
 #include "infra/config.h"
+#include "core/device_context.h"
 
 #define watchPathName CFG_STR("watchdog", "pid_file", "/home/root/myWatch.txt").c_str()
 extern const int softdogTimeout = 30;
 
-/* 通信设备文件描述符 */
-int fd_lora = -1, fd_wifi = -1, fd_bt = -1, fd_lan = -1, fdL_lan = -1;
-std::vector<int>device_id;
-std::string id = "FF", net_id = "0000", mac = "", bt_mac = "", Isr_mac = "";
-int monitor_time = 4;
-std::string current_time = "";
-char communicate_status[] = "0000";
-unsigned int hj_crc;
+/* 所有全局状态已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance() 访问 */
 
-/* 线程同步控制变量 */
-int iS_getsensor = 0; int iS_getshipsensor = 0;
-pthread_mutex_t mtx_sensor = PTHREAD_MUTEX_INITIALIZER;
-pthread_cond_t cond_sensor = PTHREAD_COND_INITIALIZER;
-
-/* 通信设备管理类 */
-communicaManage* CM = new communicaManage;
-
-pthread_t tid_getSensor, tid_getLan, tid_transMessage, tid_gps, tid_ship_data, tid_softwd, tid_monitor485, tid_deviceRegist;
-int wdtNewSensorId = -1, wdtShipId = -1;
-MessageQueue<std::string> transMessage;
-std::queue<std::string>readMessage;
-std::string cpu_occupy = "";
-
-int flag_wifi = 0;
-
-struct sockaddr_in wifi_ser_addr;
-struct sockaddr_in lan_ser_addr;
-struct sockaddr_in Llan_ser_addr;
-struct sockaddr_in Llan_cli_addr;
+/* 信号处理器使用的静态缓存指针（async-signal-safe 要求不能调用 DeviceContext::instance()） */
+static MessageQueue<std::string>* g_pTransMessage = nullptr;
 
 /** @brief 写PID文件的fd，供信号处理函数使用 */
 static int g_fdWatch = -1;
@@ -87,7 +63,8 @@ static void signal_handler(int signum)
 {
     (void)signum;
     /* 持久化未发送的数据（无锁版本，避免信号处理器中死锁） */
-    drainAndPersistUnsafe(transMessage);
+    if (g_pTransMessage)
+        drainAndPersistUnsafe(*g_pTransMessage);
     /* 写入PID=0通知看门狗脚本（lseek/write/close 为 async-signal-safe） */
     if (g_fdWatch >= 0) {
         lseek(g_fdWatch, 0, SEEK_SET);
@@ -125,6 +102,10 @@ int main()
         LOG_INFO("main", "Config loaded from ./config/device.conf");
     }
 
+    /* 初始化 DeviceContext 单例并缓存信号处理器所需的指针 */
+    auto& ctx = sap::DeviceContext::instance();
+    g_pTransMessage = &ctx.queues().transmit;
+
     /* 注册信号处理函数，确保被 kill 时能持久化数据 */
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -149,10 +130,8 @@ int main()
     std::string power_on_cmd = power_script + " on";
     system(power_on_cmd.c_str());
     sleep(1);
-    CSoftwareWdt softwareWdt;
-    CSoftwareWdt* g_CsoftwareWdt = &softwareWdt;
 
-    if (pthread_create(&tid_gps, NULL, GET_GPS, NULL) != 0) {
+    if (pthread_create(&ctx.threads().gps, NULL, GET_GPS, NULL) != 0) {
         LOG_ERROR("main", "pthread_create tid_gps failed");
     }
     sleep(1);
@@ -179,21 +158,21 @@ int main()
     LOG_INFO("main", "Init communicate device success");
     sleep(1);
     get_mac();
-    cpu_occupy = get_cpuOccupy();
-    LOG_INFO("main", "CPU Usage Rate: %s", cpu_occupy.c_str());
+    ctx.identity().cpu_occupy = get_cpuOccupy();
+    LOG_INFO("main", "CPU Usage Rate: %s", ctx.identity().cpu_occupy.c_str());
     std::vector<std::vector<int>> vec;
-    vec = CM->getALLIfd();
-    deviceRegist registObj(g_CsoftwareWdt, &vec);
-    if (pthread_create(&tid_deviceRegist, NULL, device_regist, &registObj) != 0) {
+    vec = ctx.commManager().getALLIfd();
+    deviceRegist registObj(&ctx.softwareWdt(), &vec);
+    if (pthread_create(&ctx.threads().device_regist, NULL, device_regist, &registObj) != 0) {
         LOG_ERROR("main", "pthread_create tid_deviceRegist failed");
-        tid_deviceRegist = 0;
+        ctx.threads().device_regist = 0;
     }
-    if (pthread_create(&tid_softwd, NULL, softwarewd, g_CsoftwareWdt) != 0) {
+    if (pthread_create(&ctx.threads().watchdog, NULL, softwarewd, &ctx.softwareWdt()) != 0) {
         LOG_ERROR("main", "pthread_create tid_softwd failed");
-        tid_softwd = 0;
+        ctx.threads().watchdog = 0;
     }
     void* regRet;
-    if (tid_deviceRegist != 0 && pthread_join(tid_deviceRegist, &regRet) == 0)
+    if (ctx.threads().device_regist != 0 && pthread_join(ctx.threads().device_regist, &regRet) == 0)
     {
         if (regRet == (void*)-1) {
             LOG_ERROR("main", "Device registration failed");
@@ -203,21 +182,21 @@ int main()
         }
     }
     LOG_INFO("main", "Device Registration Successful");
-    int numRead = readFromFile(readMessage);
+    int numRead = readFromFile(ctx.queues().offline_cache);
     LOG_INFO("main", "Read unsent packets: %d", numRead);
     sleep(1);
-    if (pthread_create(&tid_ship_data, NULL, get_ship_data, g_CsoftwareWdt) != 0) {
+    if (pthread_create(&ctx.threads().ship_data, NULL, get_ship_data, &ctx.softwareWdt()) != 0) {
         LOG_ERROR("main", "pthread_create tid_ship_data failed");
-        tid_ship_data = 0;
+        ctx.threads().ship_data = 0;
     }
-    if (pthread_create(&tid_transMessage, NULL, send_mess, g_CsoftwareWdt) != 0) {
+    if (pthread_create(&ctx.threads().trans_message, NULL, send_mess, &ctx.softwareWdt()) != 0) {
         LOG_ERROR("main", "pthread_create tid_transMessage failed");
-        tid_transMessage = 0;
+        ctx.threads().trans_message = 0;
     }
 
     /* 看门狗线程设为分离态，不再 join（它永远不会退出） */
-    if (tid_softwd != 0) {
-        pthread_detach(tid_softwd);
+    if (ctx.threads().watchdog != 0) {
+        pthread_detach(ctx.threads().watchdog);
     }
 
     /* 主线程等待信号，信号处理函数负责持久化数据和清理 */

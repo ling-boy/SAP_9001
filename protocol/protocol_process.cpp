@@ -1,15 +1,14 @@
 #include "protocol/protocol_process.h"
-#include "infra/logger.h"
 #include "infra/config.h"
+#include "core/device_context.h"
 #include <vector>
 #include <time.h>
 #include <sys/time.h>
 #include <signal.h>
+// logger.h must be included AFTER all other headers to override syslog.h LOG_INFO
+#include "infra/logger.h"
 
-extern std::string Isr_mac, id, net_id, mac, current_time;
-extern char communicate_status[];
-extern communicaManage* CM;
-extern int fd_lora;
+/* 所有全局状态已迁移至 DeviceContext 单例 */
 #define REQ_REGISTER            "01"
 #define REQ_REG_CONFIRM         "02"
 #define REQ_DATA                 "03"
@@ -108,6 +107,7 @@ float int2pString(int num)
  */
 int protoc_17(std::string buff)
 {
+    auto& ctx = sap::DeviceContext::instance();
     int ret;
     std::string confirm_message="";
     if (buff.length() < 54) return -1;
@@ -116,16 +116,16 @@ int protoc_17(std::string buff)
     {
 
         std::string recv_mac = buff.substr(16, 16);
-        if (recv_mac == mac)
+        if (recv_mac == ctx.identity().mac)
         {
-            Isr_mac=buff.substr(32,16);
-            id = buff.substr(48, 2);
-            net_id = buff.substr(50, 4);
-            confirm_message = confirm_message + "$" + "02" + "1" + id + net_id + "00" + "0012" + mac + id + "@";
-            ret = write(fd_lora, confirm_message.c_str(),strlen(confirm_message.c_str()));
+            ctx.identity().isr_mac=buff.substr(32,16);
+            ctx.identity().id = buff.substr(48, 2);
+            ctx.identity().net_id = buff.substr(50, 4);
+            confirm_message = confirm_message + "$" + "02" + "1" + ctx.identity().id + ctx.identity().net_id + "00" + "0012" + ctx.identity().mac + ctx.identity().id + "@";
+            ret = write(ctx.fds().lora, confirm_message.c_str(),strlen(confirm_message.c_str()));
             if (ret <= 0)
             {
-                LOG_ERROR("protocol", "write confirm_message failed!");
+                LOG_ERROR("protocol", "%s", "write confirm_message failed!");
                 return -1;
             }else{
                 if (ret < (int)strlen(confirm_message.c_str()))
@@ -150,12 +150,13 @@ int protoc_17(std::string buff)
  */
 int protoc_03(const std::string buff, std::string *communicate_method)
 {
+    auto& ctx = sap::DeviceContext::instance();
     if (buff.length() < 42) return -1;
     std::string recv_protocal = buff.substr(1, 2);
     if (recv_protocal == REQ_DATA)
     {
         std::string recv_mac = buff.substr(22, 16);
-        if (recv_mac == mac)
+        if (recv_mac == ctx.identity().mac)
         {
             *communicate_method = buff.substr(38, 4);
         }else
@@ -175,6 +176,7 @@ int protoc_03(const std::string buff, std::string *communicate_method)
  */
 std::string packet06(std::string strT, std::string portInfo)
 {
+    auto& ctx = sap::DeviceContext::instance();
     char packet[1024]={0};
     std::string cpu_mem = get_cpuOccupy();
     std::string accessdev_gps = "N2932E10636";
@@ -197,17 +199,16 @@ std::string packet06(std::string strT, std::string portInfo)
         str="000"+str;
     }
 
-    if (CM == NULL) return "";
-    std::string communicateType = std::to_string(CM->getSuccessId());
-    int needed = snprintf(packet, sizeof(packet), "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), id.c_str(), net_id.c_str(),
-        str.c_str(), Isr_mac.c_str(), mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
-        communicate_status, strT.c_str());
+    std::string communicateType = std::to_string(ctx.commManager().getSuccessId());
+    int needed = snprintf(packet, sizeof(packet), "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), ctx.identity().id.c_str(), ctx.identity().net_id.c_str(),
+        str.c_str(), ctx.identity().isr_mac.c_str(), ctx.identity().mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
+        ctx.identity().communicate_status, strT.c_str());
     if (needed < 0) return "";
     if (needed >= (int)sizeof(packet)) {
         char* big_buf = new char[needed + 1];
-        snprintf(big_buf, needed + 1, "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), id.c_str(), net_id.c_str(),
-            str.c_str(), Isr_mac.c_str(), mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
-            communicate_status, strT.c_str());
+        snprintf(big_buf, needed + 1, "$06%s%s%s00%s%s%s%s%s%s%s%s@", communicateType.c_str(), ctx.identity().id.c_str(), ctx.identity().net_id.c_str(),
+            str.c_str(), ctx.identity().isr_mac.c_str(), ctx.identity().mac.c_str(), portInfo.c_str(), accessdev_gps.c_str(), cpu_mem.c_str(),
+            ctx.identity().communicate_status, strT.c_str());
         std::string packets06(big_buf);
         delete[] big_buf;
         return packets06;
@@ -220,29 +221,30 @@ std::string packet06(std::string strT, std::string portInfo)
  * @brief 处理20协议（时间戳下发）
  */
 void packet20(std::string& strPacket){
-    LOG_INFO("protocol", "Start deal 20 time packet");
+    auto& ctx = sap::DeviceContext::instance();
+    LOG_INFO("protocol", "%s", "Start deal 20 time packet");
     if (strPacket.length() < 49) return;
     std::string recv_mac = strPacket.substr(16, 16);
-    if(recv_mac==mac )
+    if(recv_mac==ctx.identity().mac )
     {
-        current_time = strPacket.substr(32, 17);
+        ctx.identity().current_time = strPacket.substr(32, 17);
         struct tm tm_set;
         memset(&tm_set, 0, sizeof(tm_set));
-        tm_set.tm_year = atoi(current_time.substr(0, 4).c_str()) - 1900;
-        tm_set.tm_mon  = atoi(current_time.substr(4, 2).c_str()) - 1;
-        tm_set.tm_mday = atoi(current_time.substr(6, 2).c_str());
-        tm_set.tm_hour = atoi(current_time.substr(8, 2).c_str());
-        tm_set.tm_min  = atoi(current_time.substr(10, 2).c_str());
-        tm_set.tm_sec  = atoi(current_time.substr(12, 2).c_str());
+        tm_set.tm_year = atoi(ctx.identity().current_time.substr(0, 4).c_str()) - 1900;
+        tm_set.tm_mon  = atoi(ctx.identity().current_time.substr(4, 2).c_str()) - 1;
+        tm_set.tm_mday = atoi(ctx.identity().current_time.substr(6, 2).c_str());
+        tm_set.tm_hour = atoi(ctx.identity().current_time.substr(8, 2).c_str());
+        tm_set.tm_min  = atoi(ctx.identity().current_time.substr(10, 2).c_str());
+        tm_set.tm_sec  = atoi(ctx.identity().current_time.substr(12, 2).c_str());
         struct timeval tv_set;
         tv_set.tv_sec = mktime(&tm_set);
         if (tv_set.tv_sec == (time_t)-1) {
-            LOG_ERROR("protocol", "mktime failed in packet20");
+            LOG_ERROR("protocol", "%s", "mktime failed in packet20");
             return;
         }
-        tv_set.tv_usec = atoi(current_time.substr(14, 3).c_str()) * 1000;
+        tv_set.tv_usec = atoi(ctx.identity().current_time.substr(14, 3).c_str()) * 1000;
         settimeofday(&tv_set, NULL);
-        LOG_INFO("protocol", "Update time success: %s", current_time.c_str());
+        LOG_INFO("protocol", "Update time success: %s", ctx.identity().current_time.c_str());
     }
 }
 
@@ -258,7 +260,7 @@ int dataTofile(MessageQueue<std::string>& buffer){
         const char* buff = item.c_str();
         int num = write(fd, buff, strlen(buff));
         if(num <= 0) { LOG_ERROR("protocol", "dataTofile write failed: %s", strerror(errno)); continue; }
-        if (write(fd, "\n", 1) < 0) LOG_ERROR("protocol", "dataTofile write newline failed");
+        if (write(fd, "\n", 1) < 0) LOG_ERROR("protocol", "%s", "dataTofile write newline failed");
         count ++;
     }
     close(fd);
@@ -275,7 +277,7 @@ int drainAndPersist(MessageQueue<std::string>& buffer){
     for(const auto& item : items){
         int num = write(fd, item.c_str(), item.length());
         if(num <= 0) { LOG_ERROR("protocol", "drainAndPersist write failed: %s", strerror(errno)); continue; }
-        if (write(fd, "\n", 1) < 0) LOG_ERROR("protocol", "drainAndPersist write newline failed");
+        if (write(fd, "\n", 1) < 0) LOG_ERROR("protocol", "%s", "drainAndPersist write newline failed");
         count++;
     }
     close(fd);

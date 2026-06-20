@@ -9,20 +9,14 @@
 #include "hal/gps.h"
 #include "infra/message_queue.h"
 #include "infra/logger.h"
+#include "core/device_context.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <math.h>
 #include <cerrno>
 
-/* 外部全局变量（在 modbus_9001.cpp 中定义） */
-extern MessageQueue<std::string> transMessage;
-extern pthread_mutex_t mtx_sensor;
-extern pthread_cond_t cond_sensor;
-extern int iS_getsensor;
-extern int iS_getshipsensor;
-extern int wdtNewSensorId;
-extern int wdtShipId;
+/* 所有全局状态已迁移至 DeviceContext 单例 */
 
 /* ====== SensorDriver 基类实现 ====== */
 
@@ -149,14 +143,14 @@ void SensorDriver::run()
     std::string hj_Flag = "4";
     size_t sensor_count = configs.size();
     if (sensor_count == 0) {
-        LOG_ERROR("sensor", "传感器配置为空，无法启动采集");
+        LOG_ERROR("sensor", "%s", "sensor config is empty, cannot start collection");
         return;
     }
 
     /* 初始化 Modbus RTU */
     modbus_t* ctx = modbus_new_rtu(device_.c_str(), baud_, 'N', 8, 1);
     if (ctx == NULL) {
-        LOG_ERROR("sensor", "modbus_new_rtu failed");
+        LOG_ERROR("sensor", "%s", "modbus_new_rtu failed");
         return;
     }
     modbus_rtu_set_serial_mode(ctx, MODBUS_RTU_RS485);
@@ -167,13 +161,13 @@ void SensorDriver::run()
         modbus_free(ctx);
         return;
     }
-    LOG_INFO("sensor", "传感器连接成功!");
+    LOG_INFO("sensor", "%s", "sensor connected successfully");
 
     std::vector<double> sensor_values(sensor_count, -999);
     size_t index_flag = 0;
 
     while (1) {
-        LOG_INFO("sensor", "开始获取传感器%zu数据", index_flag + 1);
+        LOG_INFO("sensor", "Start reading sensor %zu data", index_flag + 1);
         std::string accessdev_gps = gps_get_location();
         modbus_set_slave(ctx, configs[index_flag].slave_address);
 
@@ -183,23 +177,23 @@ void SensorDriver::run()
             sleep(configs[index_flag].sleep_seconds);
         }
         else {
-            LOG_WARN("sensor", "读取传感器%zu数据失败", index_flag + 1);
+            LOG_WARN("sensor", "Read sensor %zu data failed", index_flag + 1);
             sleep(4);
         }
         wdt_->KeepSoftwareWdtAlive(wdt_id_);
-        LOG_INFO("sensor", "thread of sensor feed dog success");
+        LOG_INFO("sensor", "%s", "thread of sensor feed dog success");
 
         /* 最后一个传感器读取完成后，打包 HJ212 数据 */
         if (index_flag == sensor_count - 1) {
             std::string hj_QN = time_now_to_string();
 
             /* 打印所有传感器数据 */
-            LOG_INFO("sensor", "--------------------------------");
-            LOG_INFO("sensor", "获取一轮后的数据如下：");
+            LOG_INFO("sensor", "%s", "--------------------------------");
+            LOG_INFO("sensor", "%s", "Data after one round:");
             for (size_t i = 0; i < sensor_count; i++) {
                 LOG_INFO("sensor", "%s: %f", configs[i].name.c_str(), sensor_values[i]);
             }
-            LOG_INFO("sensor", "--------------------------------");
+            LOG_INFO("sensor", "%s", "--------------------------------");
 
             /* 构建 HJ212 数据段 */
             std::string data_segment = "QN=" + hj_QN + ";ST=" + st + ";CN=2011;PW=123456;MN=" + hj_MN +
@@ -227,15 +221,16 @@ void SensorDriver::run()
             std::string data_len = ensureLen_4(len_origin);
             unsigned int hjcrc = CRC16_Checkout((unsigned char*)data_segment.c_str(), len_origin);
             std::string hj212pacet = ensure_crc4_packet(hjcrc, data_len, data_segment);
-            LOG_INFO("sensor", "HJ212数据包:%s", hj212pacet.c_str());
+            LOG_INFO("sensor", "HJ212 packet: %s", hj212pacet.c_str());
 
             /* 封装 06 协议并推送到队列 */
             std::string data06 = packet06(hj212pacet, port_info_);
-            LOG_INFO("sensor", "06数据包:%s", data06.c_str());
-            transMessage.push(data06);
+            LOG_INFO("sensor", "06 packet: %s", data06.c_str());
+            auto& ctx = sap::DeviceContext::instance();
+            ctx.queues().transmit.push(data06);
 
             /* 等待下一次采集触发 */
-            int S = pthread_mutex_lock(&mtx_sensor);
+            int S = pthread_mutex_lock(&ctx.sensorSync().mtx);
             if (S != 0) {
                 LOG_ERROR("sensor", "pthread_mutex_lock(): %s", strerror(errno));
                 sleep(4);
@@ -244,18 +239,18 @@ void SensorDriver::run()
             }
             /* 根据端口信息等待对应的条件变量 */
             if (port_info_ == "100") { /* RS485_A = 船载传感器 */
-                while (iS_getshipsensor == 0) {
-                    pthread_cond_wait(&cond_sensor, &mtx_sensor);
+                while (ctx.sensorSync().ship_data_ready == 0) {
+                    pthread_cond_wait(&ctx.sensorSync().cond, &ctx.sensorSync().mtx);
                 }
-                iS_getshipsensor = 0;
+                ctx.sensorSync().ship_data_ready = 0;
             }
             else { /* RS485_B = 大气传感器 */
-                while (iS_getsensor == 0) {
-                    pthread_cond_wait(&cond_sensor, &mtx_sensor);
+                while (ctx.sensorSync().gas_data_ready == 0) {
+                    pthread_cond_wait(&ctx.sensorSync().cond, &ctx.sensorSync().mtx);
                 }
-                iS_getsensor = 0;
+                ctx.sensorSync().gas_data_ready = 0;
             }
-            pthread_mutex_unlock(&mtx_sensor);
+            pthread_mutex_unlock(&ctx.sensorSync().mtx);
 
             /* 重置所有传感器值 */
             for (size_t i = 0; i < sensor_count; i++) {
@@ -319,11 +314,12 @@ public:
 
 void* get_ship_data(void* arg)
 {
+    auto& ctx = sap::DeviceContext::instance();
     CSoftwareWdt* wdt = (CSoftwareWdt*)arg;
     const char* threadname = "get_ship_data";
-    wdtShipId = wdt->RequestSoftwareWdtID(threadname, 30);
+    ctx.watchdog().ship_wdt_id = wdt->RequestSoftwareWdtID(threadname, 30);
 
-    ShipSensorDriver driver(wdt, wdtShipId);
+    ShipSensorDriver driver(wdt, ctx.watchdog().ship_wdt_id);
     driver.run();
     return nullptr;
 }
@@ -372,11 +368,12 @@ public:
 
 void* get_gassensor_data(void* arg)
 {
+    auto& ctx = sap::DeviceContext::instance();
     CSoftwareWdt* wdt = (CSoftwareWdt*)arg;
     const char* threadname = "get_gassensor_data";
-    wdtNewSensorId = wdt->RequestSoftwareWdtID(threadname, 40);
+    ctx.watchdog().gas_wdt_id = wdt->RequestSoftwareWdtID(threadname, 40);
 
-    GasSensorDriver driver(wdt, wdtNewSensorId);
+    GasSensorDriver driver(wdt, ctx.watchdog().gas_wdt_id);
     driver.run();
     return nullptr;
 }

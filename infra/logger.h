@@ -125,7 +125,7 @@ public:
         struct tm tm_info;
         localtime_r(&tv.tv_sec, &tm_info);
 
-        char timestamp[32];
+        char timestamp[40];
         snprintf(timestamp, sizeof(timestamp), "%04d-%02d-%02d %02d:%02d:%02d.%03d",
                  tm_info.tm_year + 1900, tm_info.tm_mon + 1, tm_info.tm_mday,
                  tm_info.tm_hour, tm_info.tm_min, tm_info.tm_sec,
@@ -240,6 +240,15 @@ private:
 #ifdef LOG_FATAL
 #undef LOG_FATAL
 #endif
+
+// Force undef any existing definitions from syslog.h
+#undef LOG_TRACE
+#undef LOG_DEBUG
+#undef LOG_INFO
+#undef LOG_WARN
+#undef LOG_ERR
+#undef LOG_ERROR
+#undef LOG_FATAL
 
 #define LOG_TRACE(module, fmt, ...) sap::Logger::instance().log(sap::LogLevel::TRACE, module, fmt, ##__VA_ARGS__)
 #define LOG_DEBUG(module, fmt, ...) sap::Logger::instance().log(sap::LogLevel::DEBUG, module, fmt, ##__VA_ARGS__)

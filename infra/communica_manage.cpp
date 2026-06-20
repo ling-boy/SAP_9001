@@ -230,11 +230,11 @@ bool communicaManage::reinit(int id ,int para)
 	struct communicateNode* temp = findcommunicate(id);
 	if (temp == NULL)
 	{
-		LOG_ERROR("comm_mgr", "No device found, reinit failed");
+		LOG_ERROR("comm_mgr", "%s", "No device found, reinit failed");
 		return false;
 	}
 	if (temp->com->reback[0] == NULL) {
-		LOG_ERROR("comm_mgr", "Reinit failed: no init callback registered");
+		LOG_ERROR("comm_mgr", "%s", "Reinit failed: no init callback registered");
 		return false;
 	}
 	else
@@ -243,7 +243,7 @@ bool communicaManage::reinit(int id ,int para)
 		int(*func)(int para) = temp->com->reback[0];
 		deletecommunicateNode(id);
 		if (!addCommunicateNode(id, fd)) {
-			LOG_ERROR("comm_mgr", "Reinit failed: add node failed");
+			LOG_ERROR("comm_mgr", "%s", "Reinit failed: add node failed");
 			return false;
 		}
 		callbackRgist(id,0, func);
@@ -262,7 +262,7 @@ bool communicaManage::callbackRgist(int id,int pos ,int(*function)(int))
 	struct communicateNode* temp = findcommunicate(id);
 	if (temp==NULL)
 	{
-		LOG_ERROR("comm_mgr", "No device found, callback register failed");
+		LOG_ERROR("comm_mgr", "%s", "No device found, callback register failed");
 		return false;
 	}
 	else

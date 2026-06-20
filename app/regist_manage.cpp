@@ -1,6 +1,7 @@
 #include "app/regist_manage.h"
 #include "hal/gps.h"
 #include "infra/logger.h"
+#include "core/device_context.h"
 #include <cstdlib>
 #include <sys/time.h>
 #include <time.h>
@@ -28,7 +29,8 @@ static int write_full(int fd, const char* buf, size_t len)
  */
 void* device_regist(void* arg)
 {
-    LOG_INFO("regist", "device_regist start!!!");
+    auto& ctx = sap::DeviceContext::instance();
+    LOG_INFO("regist", "%s", "device_regist start!!!");
     struct timeval tv1;
     struct timeval tv2;
     uint8_t RX_buf[RX_SIZE];
@@ -42,7 +44,7 @@ void* device_regist(void* arg)
     CSoftwareWdt* g_CsoftwareWdt = dev->g_CsoftwareWdt;
     std::vector<std::vector<int>>* vec = dev->vec;
     if ((*vec).empty()) {
-        LOG_ERROR("regist", "device_regist: no communication devices available");
+        LOG_ERROR("regist", "%s", "device_regist: no communication devices available");
         return (void*)-1;
     }
     int size = static_cast<int>((*vec).size()) - 1;
@@ -52,9 +54,9 @@ void* device_regist(void* arg)
     wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, softdogTimeout);
     std::string regist_message;
     int i;
-    LOG_INFO("regist", "device_regist 1");
+    LOG_INFO("regist", "%s", "device_regist 1");
     g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-    LOG_INFO("regist", "device_regist 1");
+    LOG_INFO("regist", "%s", "device_regist 1");
 /* 注册失败重试入口：跳转至此重新选择信道进行注册 */
 select_again:
     /* 当前通信设备已重试5次，切换到下一个通信设备 */
@@ -62,7 +64,7 @@ select_again:
     {
         size--;
         regist_num = 1;
-        LOG_INFO("regist", "下一个通信设备开始注册");
+        LOG_INFO("regist", "%s", "switching to next comm device for registration");
         sleep(5);
     }
     /* 一轮注册完毕（所有通信设备均尝试失败），退出注册线程 */
@@ -78,7 +80,7 @@ select_again:
         system("killall wpa_supplicant");
         sleep(1);
         system("killall udhcpc");
-        LOG_ERROR("regist", "一轮已经注册完毕, 退出注册线程");
+        LOG_ERROR("regist", "%s", "all devices tried, exiting registration thread");
         return (void*)-1;
 
     }
@@ -90,11 +92,11 @@ select_again:
         tv1.tv_usec = 0;
         myCount++;
         if (myCount == 1000) return (void*)-1;
-        LOG_INFO("regist", "device_regist 8");
+        LOG_INFO("regist", "%s", "device_regist 8");
         g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-        LOG_INFO("regist", "device_regist 8");
+        LOG_INFO("regist", "%s", "device_regist 8");
         ret = select((*vec)[size][1] + 1, &fdset, NULL, NULL, &tv1);
-        LOG_INFO("regist", "device_regist 8 ----- 8");
+        LOG_INFO("regist", "%s", "device_regist 8 ----- 8");
         if (ret > 0)
         {
             if (FD_ISSET((*vec)[size][1], &fdset))
@@ -107,18 +109,18 @@ select_again:
                 }
                 if (ret >= 2 && ret < 58 && RX_buf[0] != '$' && RX_buf[ret - 1] == '@') //该包为最后一个数据包
                 {
-                    LOG_INFO("regist", "device_regist 2");
+                    LOG_INFO("regist", "%s", "device_regist 2");
                     g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                    LOG_INFO("regist", "device_regist 2");
+                    LOG_INFO("regist", "%s", "device_regist 2");
                     goto sendreg_entrance;
                 }
                 else
                 {
                     if (RX_buf[0] == '$' && RX_buf[ret - 1] == '@' && select_num == 5)
                     {
-                        LOG_INFO("regist", "device_regist 3");
+                        LOG_INFO("regist", "%s", "device_regist 3");
                         g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                        LOG_INFO("regist", "device_regist 3");
+                        LOG_INFO("regist", "%s", "device_regist 3");
                         goto sendreg_entrance;
                     }
                     else
@@ -131,9 +133,9 @@ select_again:
         /* select超时（15秒），表示信道空闲，可以发送注册请求 */
         else if (ret == 0)
         {
-            LOG_INFO("regist", "device_regist 4");
+            LOG_INFO("regist", "%s", "device_regist 4");
             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-            LOG_INFO("regist", "device_regist 4");
+            LOG_INFO("regist", "%s", "device_regist 4");
             goto sendreg_entrance;
         }
         else {
@@ -142,8 +144,8 @@ select_again:
     }
 /* 发送注册请求入口：组装01协议注册包并发送 */
 sendreg_entrance:
-    sleep(monitor_time / 4);
-    regist_message = std::string("$") + "01" + std::to_string((*vec)[size][0]) + id + net_id + "00" + "0026" + mac + communicate_status + "010" + gps_get_location() + cpu_occupy + "@";
+    sleep(ctx.identity().monitor_time / 4);
+    regist_message = std::string("$") + "01" + std::to_string((*vec)[size][0]) + ctx.identity().id + ctx.identity().net_id + "00" + "0026" + ctx.identity().mac + ctx.identity().communicate_status + "010" + gps_get_location() + ctx.identity().cpu_occupy + "@";
     ret = write_full((*vec)[size][1], regist_message.c_str(), regist_message.size());
     if (ret < 0)
     {
@@ -161,18 +163,18 @@ sendreg_entrance:
         {
             FD_ZERO(&fdset);
             FD_SET((*vec)[size][1], &fdset);
-            tv2.tv_sec = monitor_time;
+            tv2.tv_sec = ctx.identity().monitor_time;
             tv2.tv_usec = 0;
-            LOG_INFO("regist", "device_regist 5");
+            LOG_INFO("regist", "%s", "device_regist 5");
             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-            LOG_INFO("regist", "device_regist 5");
+            LOG_INFO("regist", "%s", "device_regist 5");
             ret = select((*vec)[size][1] + 1, &fdset, NULL, NULL, &tv2);
             LOG_INFO("regist", "ret >> %d", ret);
             if (ret > 0)
             {
-                LOG_INFO("regist", "device_regist 6");
+                LOG_INFO("regist", "%s", "device_regist 6");
                 g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                LOG_INFO("regist", "device_regist 6");
+                LOG_INFO("regist", "%s", "device_regist 6");
                 memset(RX_buf, 0, sizeof(RX_buf));
                 ret = read((*vec)[size][1], RX_buf, RX_SIZE);
                 if (ret <= 0) {
@@ -180,7 +182,7 @@ sendreg_entrance:
                     continue;
                 }
 #ifdef DEBUG
-                LOG_INFO("regist", "Regist recv：%.58s", (const char*)RX_buf);
+                LOG_INFO("regist", "Regist recv: %.58s", (const char*)RX_buf);
 #endif
                 std::string regist_recv_message(RX_buf, RX_buf + ret);
                 if (regist_recv_message.length() < 54) {
@@ -192,12 +194,12 @@ sendreg_entrance:
                 if (recv_protocal == REQ_SEND_INFO)
                 {
                     std::string recv_mac = regist_recv_message.substr(16, 16);
-                    if (recv_mac == mac)
+                    if (recv_mac == ctx.identity().mac)
                     {
-                        Isr_mac = regist_recv_message.substr(32, 16);
-                        id = regist_recv_message.substr(48, 2);
-                        LOG_INFO("regist", "网关下发的ID：%s", id.c_str());
-                        net_id = regist_recv_message.substr(50, 4);
+                        ctx.identity().isr_mac = regist_recv_message.substr(32, 16);
+                        ctx.identity().id = regist_recv_message.substr(48, 2);
+                        LOG_INFO("regist", "Gateway assigned ID: %s", ctx.identity().id.c_str());
+                        ctx.identity().net_id = regist_recv_message.substr(50, 4);
                         break;
                     }
                     else
@@ -211,32 +213,32 @@ sendreg_entrance:
                 }
             }
         }
-        if (id != "FF")
+        if (ctx.identity().id != "FF")
         {
             int listen_num = 8;
             /* 发送02确认包，通知ISR注册参数已收到 */
             std::string confirm_message = "";
-            confirm_message = confirm_message + "$" + "02" + std::to_string((*vec)[size][0]) + id + net_id + "00" + "0012" + mac + id + "@";
+            confirm_message = confirm_message + "$" + "02" + std::to_string((*vec)[size][0]) + ctx.identity().id + ctx.identity().net_id + "00" + "0012" + ctx.identity().mac + ctx.identity().id + "@";
             ret = write_full((*vec)[size][1], confirm_message.c_str(), confirm_message.size());
             if (ret < 0)
             {
-                LOG_ERROR("regist", "write confirm_message failed!");
+                LOG_ERROR("regist", "%s", "write confirm_message failed!");
             }
             LOG_INFO("regist", "confirm_message: %s", confirm_message.c_str());
             /* 发送02确认包后，等待ISR下发20协议时间戳 */
-            LOG_INFO("regist", "等待下发时间戳");
+            LOG_INFO("regist", "%s", "waiting for timestamp from gateway");
             while (listen_num)
             {
-                LOG_INFO("regist", "device_regist 7");
+                LOG_INFO("regist", "%s", "device_regist 7");
                 g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                LOG_INFO("regist", "device_regist 7");
+                LOG_INFO("regist", "%s", "device_regist 7");
                 FD_ZERO(&fdset);
                 FD_SET((*vec)[size][1], &fdset);
-                tv2.tv_sec = monitor_time;
+                tv2.tv_sec = ctx.identity().monitor_time;
                 tv2.tv_usec = 0;
                 ret = select((*vec)[size][1] + 1, &fdset, NULL, NULL, &tv2);
                 listen_num--;
-                LOG_INFO("regist", "时间戳监听计数器：%d", listen_num);
+                LOG_INFO("regist", "Timestamp listen counter: %d", listen_num);
                 if (ret > 0)
                 {
                     memset(RX_buf, 0, sizeof(RX_buf));
@@ -256,33 +258,33 @@ sendreg_entrance:
                     std::string recv_mac = time_recvmessage.substr(16, 16);
                     LOG_INFO("regist", "%s", recv_mac.c_str());
                     /* 收到20协议时间戳，设置系统时间并使能设备 */
-                    if (recv_protocal == TIME_SEND && recv_mac == mac)
+                    if (recv_protocal == TIME_SEND && recv_mac == ctx.identity().mac)
                     {
-                        current_time = time_recvmessage.substr(32, 17);   //获取网关下发参数时间戳 2016 08 01 08 58 57 223
+                        ctx.identity().current_time = time_recvmessage.substr(32, 17);   //获取网关下发参数时间戳 2016 08 01 08 58 57 223
                         struct tm tm_set;
                         memset(&tm_set, 0, sizeof(tm_set));
-                        tm_set.tm_year = atoi(current_time.substr(0, 4).c_str()) - 1900;
-                        tm_set.tm_mon  = atoi(current_time.substr(4, 2).c_str()) - 1;
-                        tm_set.tm_mday = atoi(current_time.substr(6, 2).c_str());
-                        tm_set.tm_hour = atoi(current_time.substr(8, 2).c_str());
-                        tm_set.tm_min  = atoi(current_time.substr(10, 2).c_str());
-                        tm_set.tm_sec  = atoi(current_time.substr(12, 2).c_str());
+                        tm_set.tm_year = atoi(ctx.identity().current_time.substr(0, 4).c_str()) - 1900;
+                        tm_set.tm_mon  = atoi(ctx.identity().current_time.substr(4, 2).c_str()) - 1;
+                        tm_set.tm_mday = atoi(ctx.identity().current_time.substr(6, 2).c_str());
+                        tm_set.tm_hour = atoi(ctx.identity().current_time.substr(8, 2).c_str());
+                        tm_set.tm_min  = atoi(ctx.identity().current_time.substr(10, 2).c_str());
+                        tm_set.tm_sec  = atoi(ctx.identity().current_time.substr(12, 2).c_str());
                         struct timeval tv_set;
                         tv_set.tv_sec = mktime(&tm_set);
                         if (tv_set.tv_sec == (time_t)-1) {
-                            LOG_ERROR("regist", "mktime failed, invalid timestamp");
+                            LOG_ERROR("regist", "%s", "mktime failed, invalid timestamp");
                             continue;
                         }
-                        tv_set.tv_usec = atoi(current_time.substr(14, 3).c_str()) * 1000;
+                        tv_set.tv_usec = atoi(ctx.identity().current_time.substr(14, 3).c_str()) * 1000;
                         if (settimeofday(&tv_set, NULL) != 0) {
                             LOG_ERROR("regist", "settimeofday failed: %s", strerror(errno));
                         }
-                        LOG_INFO("regist", "设置系统时间成功: %s", current_time.c_str());
+                        LOG_INFO("regist", "Set system time success: %s", ctx.identity().current_time.c_str());
                         /* 设置系统时间后，将当前通信设备设置为使能状态，注册成功 */
-                        if (CM->setEnable((*vec)[size][0]) == true)   //将其设置为注册成功使能状态
+                        if (ctx.commManager().setEnable((*vec)[size][0]) == true)   //将其设置为注册成功使能状态
                         {
-                            LOG_INFO("regist", "ID号为：%d 使能", (*vec)[size][0]);
-                            LOG_INFO("regist", "SAP注册成功");
+                            LOG_INFO("regist", "Device ID=%d enabled", (*vec)[size][0]);
+                            LOG_INFO("regist", "%s", "SAP register success");
                             g_CsoftwareWdt->ReleaseSoftwareWdtID(threadname, wdt_id); //解除对此线程的监控
                             return (void*)0;
                         }

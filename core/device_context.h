@@ -17,9 +17,8 @@
 #include <string>
 #include <vector>
 #include <queue>
-#include <mutex>
-#include <condition_variable>
 #include <cstring>
+#include <pthread.h>
 #include "infra/communica_manage.h"
 #include "infra/message_queue.h"
 #include "infra/software_wdt.h"
@@ -65,14 +64,15 @@ public:
         int lan = -1;
         int lan_server = -1;
         int flag_wifi = 0;
+        std::vector<int> device_id;              // 已初始化成功的通信设备ID列表
     };
 
     // ======================================================================
     // 线程同步（传感器数据就绪通知）
     // ======================================================================
     struct SensorSync {
-        std::mutex mtx;
-        std::condition_variable cond;
+        pthread_mutex_t mtx = PTHREAD_MUTEX_INITIALIZER;
+        pthread_cond_t cond = PTHREAD_COND_INITIALIZER;
         int ship_data_ready = 0;
         int gas_data_ready = 0;
     };
@@ -83,7 +83,8 @@ public:
     struct MessageQueues {
         MessageQueue<std::string> transmit;      // 实时发送队列
         std::queue<std::string> offline_cache;   // 离线缓存队列
-        std::mutex offline_mtx;                   // 离线缓存互斥锁
+        pthread_mutex_t offline_mtx = PTHREAD_MUTEX_INITIALIZER;  // 离线缓存互斥锁
+        unsigned int hj_crc = 0;                 // HJ212 CRC 校验值
     };
 
     // ======================================================================
@@ -159,13 +160,14 @@ public:
      * @param is_ship true=船载传感器, false=大气传感器
      */
     void notifySensorDataReady(bool is_ship) {
-        std::lock_guard<std::mutex> lock(sensor_sync_.mtx);
+        pthread_mutex_lock(&sensor_sync_.mtx);
         if (is_ship) {
             sensor_sync_.ship_data_ready = 1;
         } else {
             sensor_sync_.gas_data_ready = 1;
         }
-        sensor_sync_.cond.notify_all();
+        pthread_mutex_unlock(&sensor_sync_.mtx);
+        pthread_cond_broadcast(&sensor_sync_.cond);
     }
 
     /**
@@ -173,14 +175,17 @@ public:
      * @param is_ship true=船载传感器, false=大气传感器
      */
     void waitForSensorData(bool is_ship) {
-        std::unique_lock<std::mutex> lock(sensor_sync_.mtx);
+        pthread_mutex_lock(&sensor_sync_.mtx);
         if (is_ship) {
-            sensor_sync_.cond.wait(lock, [this]{ return sensor_sync_.ship_data_ready != 0; });
+            while (sensor_sync_.ship_data_ready == 0)
+                pthread_cond_wait(&sensor_sync_.cond, &sensor_sync_.mtx);
             sensor_sync_.ship_data_ready = 0;
         } else {
-            sensor_sync_.cond.wait(lock, [this]{ return sensor_sync_.gas_data_ready != 0; });
+            while (sensor_sync_.gas_data_ready == 0)
+                pthread_cond_wait(&sensor_sync_.cond, &sensor_sync_.mtx);
             sensor_sync_.gas_data_ready = 0;
         }
+        pthread_mutex_unlock(&sensor_sync_.mtx);
     }
 
     // 禁止拷贝

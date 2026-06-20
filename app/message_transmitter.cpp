@@ -9,6 +9,7 @@
 #include "infra/message_queue.h"
 #include "infra/logger.h"
 #include "protocol/protocol_process.h"
+#include "core/device_context.h"
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
@@ -39,23 +40,13 @@ static int write_full(int fd, const char* buf, size_t len)
 #define TIME_SEND   "20"
 #define RX_SIZE     58
 
-/* 外部全局变量（在 modbus_9001.cpp 中定义） */
-extern MessageQueue<std::string> transMessage;
-extern std::queue<std::string> readMessage;
-extern pthread_mutex_t mtx_sensor;
-extern pthread_cond_t cond_sensor;
-extern int iS_getsensor;
-extern int iS_getshipsensor;
-extern int wdtNewSensorId;
-extern int wdtShipId;
-extern std::string mac;
-extern unsigned int hj_crc;
-extern communicaManage* CM;
+/* 所有全局状态已迁移至 DeviceContext 单例 */
 extern const int softdogTimeout;
 
 void* send_mess(void* arg)
 {
-    LOG_INFO("transmit", "start trans message to getway");
+    auto& ctx = sap::DeviceContext::instance();
+    LOG_INFO("transmit", "%s", "start trans message to gateway");
     uint8_t RX_buf[RX_SIZE];
     int ret = -1;
     fd_set fdset;
@@ -71,9 +62,8 @@ void* send_mess(void* arg)
     int flag = true;
     while (1)
     {
-        if (!CM) { sleep(1); continue; }
-        int deviceFd = CM->getSuccessFd();
-        LOG_INFO("transmit", "Enable FD Num：%d", deviceFd);
+        int deviceFd = ctx.commManager().getSuccessFd();
+        LOG_INFO("transmit", "Enable FD Num: %d", deviceFd);
         if (deviceFd < 0) {
             sleep(1);
             continue;
@@ -104,85 +94,85 @@ void* send_mess(void* arg)
                     continue;
                 }
                 if (ret == 0) {
-                    LOG_ERROR("transmit", "<<<<<<<<<<<<<ISR Quit<<<<<<<<<<<<<<");
-                    LOG_ERROR("transmit", "<<<<<<<<<<<<<SAP Will reConnect<<<<<<<<<<<<<<");
+                    LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<ISR Quit<<<<<<<<<<<<<<");
+                    LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<SAP Will reConnect<<<<<<<<<<<<<<");
                     return 0;
                 }
                 {
                     std::string recv_message(RX_buf, RX_buf + ret);
-                    LOG_INFO("transmit", "Message From The Gateway：%s", recv_message.c_str());
+                    LOG_INFO("transmit", "Message From The Gateway: %s", recv_message.c_str());
                     if (recv_message.length() < 38) continue;
                     std::string recv_protocal = recv_message.substr(1, 2);
                     if (recv_protocal == REQ_DATA)
                     {
                         std::string recv_mac = recv_message.substr(22, 16);
-                        if (recv_mac == mac)
+                        if (recv_mac == ctx.identity().mac)
                         {
                             count++;
-                            LOG_INFO("transmit", "当前消息报计数器: %d", count);
+                            LOG_INFO("transmit", "Message counter: %d", count);
                             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                            LOG_INFO("transmit", "thread of trans_message feed dog success");
-                            pthread_mutex_lock(&mtx_sensor);
-                            iS_getsensor = 1;
-                            iS_getshipsensor = 1;
-                            pthread_mutex_unlock(&mtx_sensor);
-                            pthread_cond_broadcast(&cond_sensor);
-                            pthread_mutex_lock(&mtx_sensor);
-                            while (!readMessage.empty()) {
+                            LOG_INFO("transmit", "%s", "thread of trans_message feed dog success");
+                            pthread_mutex_lock(&ctx.sensorSync().mtx);
+                            ctx.sensorSync().gas_data_ready = 1;
+                            ctx.sensorSync().ship_data_ready = 1;
+                            pthread_mutex_unlock(&ctx.sensorSync().mtx);
+                            pthread_cond_broadcast(&ctx.sensorSync().cond);
+                            pthread_mutex_lock(&ctx.sensorSync().mtx);
+                            while (!ctx.queues().offline_cache.empty()) {
                                 flag = false;
-                                LOG_INFO("transmit", "当前未发送的缓存队列还剩余： %zu", readMessage.size());
-                                std::string str = readMessage.front();
-                                readMessage.pop();
-                                pthread_mutex_unlock(&mtx_sensor);
+                                LOG_INFO("transmit", "Offline cache remaining: %zu", ctx.queues().offline_cache.size());
+                                std::string str = ctx.queues().offline_cache.front();
+                                ctx.queues().offline_cache.pop();
+                                pthread_mutex_unlock(&ctx.sensorSync().mtx);
                                 ret = write_full(deviceFd, str.c_str(), str.size());
                                 if (ret < 0)
                                 {
                                     LOG_ERROR("transmit", "TransFd = %d", deviceFd);
                                     LOG_ERROR("transmit", "data_packet = %s", str.c_str());
                                     LOG_ERROR("transmit", "Trans error(deviceFd): %s", strerror(errno));
-                                    pthread_mutex_lock(&mtx_sensor);
-                                    readMessage.push(str);
-                                    pthread_mutex_unlock(&mtx_sensor);
+                                    pthread_mutex_lock(&ctx.sensorSync().mtx);
+                                    ctx.queues().offline_cache.push(str);
+                                    pthread_mutex_unlock(&ctx.sensorSync().mtx);
                                 }
                                 else
                                 {
                                     sleep(2);
                                     g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                                    LOG_INFO("transmit", "发送离线缓存包");
-                                    LOG_INFO("transmit", "hj_crc: %u", hj_crc);
-                                    LOG_INFO("transmit", "=======================");
+                                    LOG_INFO("transmit", "%s", "Sent offline cache packet");
+                                    LOG_INFO("transmit", "hj_crc: %u", ctx.queues().hj_crc);
+                                    LOG_INFO("transmit", "%s", "=======================");
                                     LOG_INFO("transmit", "data_packet = %s", str.c_str());
                                     LOG_INFO("transmit", "Trans success(deviceFd) %d", deviceFd);
-                                    LOG_INFO("transmit", "包的长度 %zu", strlen(str.c_str()));
+                                    LOG_INFO("transmit", "Packet length %zu", strlen(str.c_str()));
                                 }
-                                g_CsoftwareWdt->KeepSoftwareWdtAlive(wdtNewSensorId);
-                                g_CsoftwareWdt->KeepSoftwareWdtAlive(wdtShipId);
-                                pthread_mutex_lock(&mtx_sensor);
+                                g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
+                                g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
+                                pthread_mutex_lock(&ctx.sensorSync().mtx);
                             }
-                            pthread_mutex_unlock(&mtx_sensor);
+                            pthread_mutex_unlock(&ctx.sensorSync().mtx);
                             if (flag == false) {
                                 flag = true;
                                 continue;
                             }
                             std::string str;
-                            if (transMessage.tryPop(str)) {
-                                LOG_INFO("transmit", "当前缓存队列剩余： %zu", transMessage.size());
+                            if (ctx.queues().transmit.tryPop(str)) {
+                                LOG_INFO("transmit", "Transmit queue remaining: %zu", ctx.queues().transmit.size());
                                 ret = write_full(deviceFd, str.c_str(), str.size());
                                 if (ret < 0)
                                 {
                                     LOG_ERROR("transmit", "TransFd = %d", deviceFd);
                                     LOG_ERROR("transmit", "data_packet = %s", str.c_str());
                                     LOG_ERROR("transmit", "Trans error(deviceFd): %s", strerror(errno));
-                                    transMessage.push(str);
+                                    ctx.queues().transmit.push(str);
                                     continue;
                                 }
                                 else
                                 {
-                                    LOG_INFO("transmit", "hj_crc: %u", hj_crc);
-                                    LOG_INFO("transmit", "=======================");
+                                    LOG_INFO("transmit", "hj_crc: %u", ctx.queues().hj_crc);
+                                    LOG_INFO("transmit", "%s", "=======================");
                                     LOG_INFO("transmit", "data_packet = %s", str.c_str());
                                     LOG_INFO("transmit", "Trans success(deviceFd) %d", deviceFd);
-                                    LOG_INFO("transmit", "包的长度 %zu", strlen(str.c_str()));
+                                    LOG_INFO("transmit", "Packet length %zu", strlen(str.c_str()));
                                     continue;
                                 }
                             }

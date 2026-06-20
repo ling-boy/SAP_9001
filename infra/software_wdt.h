@@ -22,8 +22,7 @@
 /** 最大支持的看门狗注册数量 */
 #define REQUEST_WDT_MAX_NUM	20
 
-/** 全局线程ID声明，用于看门狗超时时取消对应线程 */
-extern pthread_t tid_getSensor, tid_getLan, tid_transMessage, tid_gps, tid_ship_data, tid_softwd, tid_monitor485, tid_deviceRegist;
+/* 全局线程ID已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance().threads() 访问 */
 
 /**
  * @brief 软件看门狗类
