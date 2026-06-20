@@ -48,6 +48,8 @@ void* send_mess(void* arg)
     int wdt_id = -1;
     wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, softdogTimeout);
     int flag = true;
+    int heartbeat_counter = 0;
+    const int HEARTBEAT_INTERVAL = 2;  // 每2次超时（约60秒）发送一次心跳
     while (1)
     {
         int deviceFd = ctx.commManager().getSuccessFd();
@@ -64,6 +66,19 @@ void* send_mess(void* arg)
         if (ret == 0) {
             /* select 超时，喂狗后继续循环 */
             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
+
+            // 发送心跳包
+            heartbeat_counter++;
+            if (heartbeat_counter >= HEARTBEAT_INTERVAL) {
+                heartbeat_counter = 0;
+                std::string heartbeat = buildHeartbeat();
+                ret = write_full(deviceFd, heartbeat.c_str(), heartbeat.size());
+                if (ret < 0) {
+                    LOG_WARN("transmit", "Heartbeat send failed: %s", strerror(errno));
+                } else {
+                    LOG_INFO("transmit", "Heartbeat sent: %s", heartbeat.c_str());
+                }
+            }
             continue;
         }
         if (ret < 0) {

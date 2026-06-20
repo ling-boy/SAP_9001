@@ -112,4 +112,12 @@ int drainAndPersistUnsafe(MessageQueue<std::string>& buffer);
  */
 int readFromFile(std::queue<std::string>& recvQueue);
 
+/**
+ * @brief 构建心跳包（EF协议）
+ * @details 心跳包包含设备状态信息：CPU使用率、内存空闲率、通信状态、队列深度
+ *          格式：$EF + 通信类型 + 设备ID + 网络ID + 00 + 长度 + CPU + 内存 + 通信状态 + 队列深度 + @
+ * @return 心跳包字符串
+ */
+std::string buildHeartbeat();
+
 #endif

@@ -296,3 +296,49 @@ int readFromFile(std::queue<std::string>& recvQueue){
     else close(fd);
     return count;
 }
+
+/**
+ * @brief 构建心跳包（EF协议）
+ * @details 心跳包包含设备状态信息：CPU使用率、内存空闲率、通信状态、队列深度
+ *          格式：$EF + 通信类型 + 设备ID + 网络ID + 00 + 长度 + CPU + 内存 + 通信状态 + 队列深度 + @
+ * @return 心跳包字符串
+ */
+std::string buildHeartbeat()
+{
+    auto& ctx = sap::DeviceContext::instance();
+
+    // 获取系统状态
+    std::string cpu_mem = get_cpuOccupy();
+    std::string communicateType = std::to_string(ctx.getActiveDeviceId());
+
+    // 获取队列深度
+    int queue_depth = ctx.queues().transmit.size();
+
+    // 构建数据段：CPU使用率(2位) + 内存空闲率(2位) + 通信状态(4位) + 队列深度(4位)
+    char data_segment[16];
+    snprintf(data_segment, sizeof(data_segment), "%s%s%04d",
+             cpu_mem.c_str(), ctx.identity().communicate_status, queue_depth);
+
+    // 计算长度：数据段长度 + 固定字段长度(设备ID + 网络ID + 通信类型 = 2+4+1 = 7)
+    int length = strlen(data_segment) + 7;
+    std::string len_str = "";
+    change(length, len_str);
+
+    // 确保长度字段4位
+    int num = len_str.length();
+    if (num == 1) len_str = "000" + len_str;
+    else if (num == 2) len_str = "00" + len_str;
+    else if (num == 3) len_str = "0" + len_str;
+
+    // 组装心跳包
+    char packet[256];
+    snprintf(packet, sizeof(packet), "$EF%s%s%s00%s%s@",
+             communicateType.c_str(),
+             ctx.identity().id.c_str(),
+             ctx.identity().net_id.c_str(),
+             len_str.c_str(),
+             data_segment);
+
+    LOG_DEBUG("protocol", "Heartbeat: %s", packet);
+    return std::string(packet);
+}
