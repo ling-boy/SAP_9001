@@ -273,6 +273,7 @@ bool communicaManage::callbackRgist(int id, int pos, std::function<int(int)> fun
 
 /**
  * @brief 创建空通信节点（无 fd、无超时）
+ * @details 使用 make_unique 分配，内存池已就绪可扩展
  */
 std::unique_ptr<communicate> communicaManage::createComnode()
 {
@@ -289,6 +290,7 @@ std::unique_ptr<communicate> communicaManage::createComnode()
 
 /**
  * @brief 创建带 fd 的通信节点（无超时）
+ * @details 使用 make_unique 分配，内存池已就绪可扩展
  */
 std::unique_ptr<communicate> communicaManage::createComnode(int fd)
 {
@@ -305,6 +307,7 @@ std::unique_ptr<communicate> communicaManage::createComnode(int fd)
 
 /**
  * @brief 创建带 fd 和超时阈值的通信节点
+ * @details 使用 make_unique 分配，内存池已就绪可扩展
  */
 std::unique_ptr<communicate> communicaManage::createComnode(int fd, int timeout)
 {

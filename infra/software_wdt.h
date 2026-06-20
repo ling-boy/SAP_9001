@@ -13,8 +13,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <string>
-#include <syslog.h>
-#include <iostream>
 #include "protocol/protocol_process.h"
 #include <pthread.h>
 #include <signal.h>

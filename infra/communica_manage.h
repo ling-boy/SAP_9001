@@ -16,6 +16,7 @@
 #include <memory>
 #include <functional>
 #include "infra/circuit_breaker.h"
+#include "infra/memory_pool.h"
 
 /** 通信设备最大支持数量 */
 #define communicatemax 4
@@ -201,5 +202,8 @@ private:
 
     /** @brief 互斥锁，保护链表操作的线程安全 */
     std::recursive_mutex mtx_;
+
+    /** @brief communicate 结构体内存池（最多4个设备） */
+    sap::MemoryPool<communicate, 4> comm_pool_;
 };
 #endif
