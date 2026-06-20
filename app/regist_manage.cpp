@@ -2,6 +2,7 @@
 #include "hal/gps.h"
 #include "infra/logger.h"
 #include "infra/io_utils.h"
+#include "infra/retry_policy.h"
 #include "core/device_context.h"
 #include <cstdlib>
 #include <sys/time.h>
@@ -78,6 +79,9 @@ void* device_regist(void* arg)
     int wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, softdogTimeout);
     g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
 
+    // 指数退避：设备切换时使用，基础5秒，最大60秒
+    sap::ExponentialBackoff device_backoff(5000, 60000);
+
     // 状态机主循环
     RegistState state = RegistState::SelectChannel;
 
@@ -89,8 +93,9 @@ void* device_regist(void* arg)
             if (regist_num == 5) {
                 size--;
                 regist_num = 1;
-                LOG_INFO("regist", "%s", "switching to next comm device for registration");
-                sleep(5);
+                int delay = device_backoff.nextDelay();
+                LOG_INFO("regist", "Switching to next comm device, backoff delay=%dms", delay);
+                usleep(delay * 1000);
             }
             // 一轮注册完毕（所有通信设备均尝试失败），退出注册线程
             if (size < 0) {
