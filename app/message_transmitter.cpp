@@ -9,6 +9,7 @@
 #include "infra/message_queue.h"
 #include "infra/io_utils.h"
 #include "infra/logger.h"
+#include "infra/retry_policy.h"
 #include "protocol/protocol_process.h"
 #include "core/device_context.h"
 #include <cstdint>
@@ -50,14 +51,22 @@ void* send_mess(void* arg)
     int flag = true;
     int heartbeat_counter = 0;
     const int HEARTBEAT_INTERVAL = 2;  // 每2次超时（约60秒）发送一次心跳
+
+    // 指数退避：FD获取失败时使用，基础1秒，最大30秒
+    sap::ExponentialBackoff fd_backoff(1000, 30000);
+
     while (1)
     {
         int deviceFd = ctx.commManager().getSuccessFd();
         LOG_INFO("transmit", "Enable FD Num: %d", deviceFd);
         if (deviceFd < 0) {
-            sleep(1);
+            int delay = fd_backoff.nextDelay();
+            LOG_WARN("transmit", "No available FD, backoff delay=%dms", delay);
+            usleep(delay * 1000);
             continue;
         }
+        // 成功获取FD，重置退避
+        fd_backoff.reset();
         FD_ZERO(&fdset);
         FD_SET(deviceFd, &fdset);
         tv.tv_sec = 30;
