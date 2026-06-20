@@ -21,6 +21,9 @@
 /** 通信设备最大支持数量 */
 #define communicatemax 4
 
+// 前向声明 communicaManage，供自定义 deleter 使用
+class communicaManage;
+
 /**
  * @brief 通信设备信息结构体
  * @details 使用 std::function 替代 C 风格函数指针，支持 lambda 和仿函数
@@ -39,11 +42,27 @@ struct communicate {
 };
 
 /**
+ * @brief 自定义 deleter：将 communicate 对象归还到内存池
+ */
+struct CommunicateDeleter {
+    sap::MemoryPool<communicate, communicatemax>* pool = nullptr;
+
+    void operator()(communicate* ptr) const {
+        if (pool && ptr) {
+            pool->deallocate(ptr);
+        }
+    }
+};
+
+/** @brief 使用内存池管理的 communicate 智能指针类型 */
+using CommunicatePtr = std::unique_ptr<communicate, CommunicateDeleter>;
+
+/**
  * @brief 通信设备链表节点结构体
  * @details 使用智能指针管理内存，自动释放
  */
 struct communicateNode {
-    std::unique_ptr<communicate> com;    /**< 通信设备信息（智能指针管理） */
+    CommunicatePtr com;    /**< 通信设备信息（内存池管理） */
     int id;                              /**< 设备ID（0=LoRa, 1=WiFi, 2=蓝牙, 3=LAN） */
     bool enabled;                        /**< 使能位，标识是否注册成功 */
     std::unique_ptr<communicateNode> next; /**< 指向下一个节点（智能指针管理） */
@@ -181,21 +200,21 @@ private:
      */
     communicateNode* findcommunicate(int id);
 
-    /** @brief 创建空通信节点（无fd、无超时） */
-    std::unique_ptr<communicate> createComnode();
+    /** @brief 创建空通信节点（无fd、无超时）- 使用内存池分配 */
+    CommunicatePtr createComnode();
 
     /**
-     * @brief 创建带fd的通信节点（无超时）
+     * @brief 创建带fd的通信节点（无超时）- 使用内存池分配
      * @param fd 设备文件描述符
      */
-    std::unique_ptr<communicate> createComnode(int fd);
+    CommunicatePtr createComnode(int fd);
 
     /**
-     * @brief 创建带fd和超时阈值的通信节点
+     * @brief 创建带fd和超时阈值的通信节点 - 使用内存池分配
      * @param fd      设备文件描述符
      * @param timeout 超时阈值
      */
-    std::unique_ptr<communicate> createComnode(int fd, int timeout);
+    CommunicatePtr createComnode(int fd, int timeout);
 
     /** @brief 排序比较函数，用于按ID从小到大排序 */
     static bool cmp(const std::vector<int>& a, const std::vector<int>& b);

@@ -273,11 +273,21 @@ bool communicaManage::callbackRgist(int id, int pos, std::function<int(int)> fun
 
 /**
  * @brief 创建空通信节点（无 fd、无超时）
- * @details 使用 make_unique 分配，内存池已就绪可扩展
+ * @details 使用内存池分配，O(1) 操作，避免堆碎片
  */
-std::unique_ptr<communicate> communicaManage::createComnode()
+CommunicatePtr communicaManage::createComnode()
 {
-    auto com = std::make_unique<communicate>();
+    // 从内存池分配（O(1) 操作）
+    communicate* raw = comm_pool_.allocate();
+    if (raw == nullptr) {
+        LOG_ERROR("comm_mgr", "%s", "Memory pool exhausted for communicate");
+        return nullptr;
+    }
+
+    // 创建自定义 deleter 的智能指针
+    CommunicateDeleter deleter{&comm_pool_};
+    CommunicatePtr com(raw, deleter);
+
     com->fd = -1;
     for (int i = 0; i < 3; i++)
     {
@@ -290,11 +300,21 @@ std::unique_ptr<communicate> communicaManage::createComnode()
 
 /**
  * @brief 创建带 fd 的通信节点（无超时）
- * @details 使用 make_unique 分配，内存池已就绪可扩展
+ * @details 使用内存池分配，O(1) 操作，避免堆碎片
  */
-std::unique_ptr<communicate> communicaManage::createComnode(int fd)
+CommunicatePtr communicaManage::createComnode(int fd)
 {
-    auto com = std::make_unique<communicate>();
+    // 从内存池分配
+    communicate* raw = comm_pool_.allocate();
+    if (raw == nullptr) {
+        LOG_ERROR("comm_mgr", "%s", "Memory pool exhausted for communicate");
+        return nullptr;
+    }
+
+    // 创建自定义 deleter 的智能指针
+    CommunicateDeleter deleter{&comm_pool_};
+    CommunicatePtr com(raw, deleter);
+
     com->fd = fd;
     for (int i = 0; i < 3; i++)
     {
@@ -307,11 +327,21 @@ std::unique_ptr<communicate> communicaManage::createComnode(int fd)
 
 /**
  * @brief 创建带 fd 和超时阈值的通信节点
- * @details 使用 make_unique 分配，内存池已就绪可扩展
+ * @details 使用内存池分配，O(1) 操作，避免堆碎片
  */
-std::unique_ptr<communicate> communicaManage::createComnode(int fd, int timeout)
+CommunicatePtr communicaManage::createComnode(int fd, int timeout)
 {
-    auto com = std::make_unique<communicate>();
+    // 从内存池分配
+    communicate* raw = comm_pool_.allocate();
+    if (raw == nullptr) {
+        LOG_ERROR("comm_mgr", "%s", "Memory pool exhausted for communicate");
+        return nullptr;
+    }
+
+    // 创建自定义 deleter 的智能指针
+    CommunicateDeleter deleter{&comm_pool_};
+    CommunicatePtr com(raw, deleter);
+
     com->fd = fd;
     for (int i = 0; i < 3; i++)
     {
