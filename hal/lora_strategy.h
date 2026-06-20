@@ -7,6 +7,7 @@
 #include "core/communication_strategy.h"
 #include "infra/logger.h"
 #include "hal/lora.h"
+#include <cstdlib>
 
 namespace sap {
 
@@ -18,9 +19,11 @@ public:
     int initialize() override {
         fd_ = lora_open();
         if (fd_ >= 0) {
+            // 点亮红色 LED
+            system("echo 1 > /sys/class/leds/red/brightness");
             LOG_INFO("lora", "LoRa initialized, fd=%d", fd_);
         } else {
-            LOG_ERROR("lora", "LoRa initialization failed");
+            LOG_ERROR("lora", "%s", "LoRa initialization failed");
         }
         return fd_;
     }
@@ -31,7 +34,7 @@ public:
         if (fd_ >= 0) {
             LOG_INFO("lora", "LoRa reinitialized, fd=%d", fd_);
         } else {
-            LOG_ERROR("lora", "LoRa reinitialization failed");
+            LOG_ERROR("lora", "%s", "LoRa reinitialization failed");
         }
         return fd_;
     }

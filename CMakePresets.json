@@ -1,14 +1,25 @@
-﻿{
+{
   "version": 3,
   "configurePresets": [
     {
       "name": "linux-arm-debug",
       "displayName": "Linux ARM Debug",
-      "description": "Build for ARM target using the Linaro toolchain.",
+      "description": "Build for ARM target using GCC 13 (Debug).",
       "generator": "Ninja",
       "binaryDir": "${sourceDir}/build",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug"
+      },
+      "toolchainFile": "${sourceDir}/arm.toolchain.cmake"
+    },
+    {
+      "name": "linux-arm-release",
+      "displayName": "Linux ARM Release",
+      "description": "Build for ARM target using GCC 13 (Release, optimized).",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
       },
       "toolchainFile": "${sourceDir}/arm.toolchain.cmake"
     }
@@ -17,6 +28,10 @@
     {
       "name": "linux-arm-debug",
       "configurePreset": "linux-arm-debug"
+    },
+    {
+      "name": "linux-arm-release",
+      "configurePreset": "linux-arm-release"
     }
   ]
 }

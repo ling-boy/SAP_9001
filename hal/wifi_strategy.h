@@ -12,15 +12,41 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdlib>
 
 namespace sap {
 
 /**
  * @brief WiFi 通信策略实现
+ * @details 包含完整的 WiFi 初始化逻辑：wpa_supplicant、udhcpc、socket connect
  */
 class WifiStrategy : public CommunicationStrategyBase {
 public:
     int initialize() override {
+        // 1. 关闭 wlan0
+        LOG_INFO("wifi", "%s", "Bringing down wlan0...");
+        system("ifconfig wlan0 down");
+        sleep(2);
+
+        // 2. 杀死已有的 wpa_supplicant 和 udhcpc
+        system("killall wpa_supplicant");
+        sleep(1);
+        system("killall udhcpc");
+        sleep(1);
+
+        // 3. 启动 wpa_supplicant
+        std::string wifi_conf = CFG_STR("paths", "wifi_conf", "/home/root/wifi.conf");
+        std::string wpa_cmd = "wpa_supplicant -i wlan0 -B -c " + wifi_conf + " &";
+        LOG_INFO("wifi", "Starting wpa_supplicant with config: %s", wifi_conf.c_str());
+        system(wpa_cmd.c_str());
+        sleep(10);
+
+        // 4. 启动 DHCP 客户端
+        LOG_INFO("wifi", "%s", "Starting udhcpc...");
+        system("udhcpc -i wlan0 -t 8 -n");
+        sleep(5);
+
+        // 5. 创建 socket 并连接
         fd_ = socket(AF_INET, SOCK_STREAM, 0);
         if (fd_ < 0) {
             LOG_ERROR("wifi", "Socket create failed: %s", strerror(errno));
@@ -41,6 +67,9 @@ public:
             fd_ = -1;
             return -1;
         }
+
+        // 6. 点亮黄色 LED
+        system("echo 1 > /sys/class/leds/yellow/brightness");
 
         LOG_INFO("wifi", "WiFi connected to %s:%d, fd=%d",
                 cfg_wifi_ip().c_str(), cfg_wifi_port(), fd_);

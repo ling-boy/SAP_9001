@@ -9,6 +9,8 @@
 #include "infra/communica_manage.h"
 #include "infra/config.h"
 #include "core/device_context.h"
+#include "core/communication_factory.h"
+#include "hal/bt_strategy.h"
 #include <cstdlib>
 #include <stdio.h>
 #include <unistd.h>
@@ -233,184 +235,66 @@ int lan_reinit(int old_fd)
 int dev_init()
 {
     auto& ctx = sap::DeviceContext::instance();
-    ctx.fds().lora = lora_open();
-    if (-1 == ctx.fds().lora)
-    {
-#ifdef DEBUG
-        LOG_ERROR("dev_init", "%s", "--> No lora device");
-#endif
-    }
-    else
-    {
-        int lora_fd = ctx.fds().lora;
-        ctx.fds().device_id.push_back(lora_fd);
-        ctx.commManager().addCommunicateNode(LORA, lora_fd);
-        ctx.commManager().callbackRgist(LORA, 0, lora_reinit);
-        LOG_INFO("dev_init", "Init success: lora. Device descriptor = %d", lora_fd);
-        ctx.identity().communicate_status[0] = '1';
-        system("echo 1 > /sys/class/leds/red/brightness");
-    }
-    sleep(2);
-    system("ifconfig wlan0 down");
-    sleep(2);
-    system("killall wpa_supplicant");
-    sleep(1);
-    system("killall udhcpc");
-    sleep(1);
-    std::string wifi_conf = CFG_STR("paths", "wifi_conf", "/home/root/wifi.conf");
-    std::string wpa_cmd = "wpa_supplicant -i wlan0 -B -c " + wifi_conf + " &";
-    system(wpa_cmd.c_str());
-    sleep(10);
-    system("udhcpc -i wlan0 -t 8 -n");
-    sleep(5);
-    int fd_wifi_sock = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd_wifi_sock < 0)
-    {
-#ifdef DEBUG
-        LOG_ERROR("dev_init", "%s", "wifi: fd_wifi_sock create failure");
-#endif
-    }
-    else
-    {
-#ifdef DEBUG
-        LOG_INFO("dev_init", "%s", "wifi: fd_wifi_sock creating");
-        LOG_INFO("dev_init", "%s", "wifi: fd_wifi_sock create success");
-#endif
-        struct sockaddr_in wifi_ser_addr;
-        memset(&wifi_ser_addr, 0x0, sizeof(struct sockaddr_in));
-        wifi_ser_addr.sin_family = AF_INET;
-        wifi_ser_addr.sin_port = htons(cfg_wifi_port());
-        wifi_ser_addr.sin_addr.s_addr = inet_addr(cfg_wifi_ip().c_str());
-        int wifi_fd_connect;
-        wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), cfg_connect_timeout());
-        if (wifi_fd_connect < 0)
-        {
-#ifdef DEBUG
-            LOG_ERROR("dev_init", "wifi: connect: %s", strerror(errno));
-#endif
-            close(fd_wifi_sock);
-            ctx.fds().wifi = -1;
-        }
-        else
-        {
-#ifdef DEBUG
-            LOG_INFO("dev_init", "%s", "wifi: connect server success");
-            LOG_INFO("dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
-            ctx.fds().flag_wifi = 1;
-#endif
-            ctx.fds().wifi = fd_wifi_sock;
-            ctx.commManager().addCommunicateNode(WIFI, ctx.fds().wifi);
-            ctx.commManager().callbackRgist(WIFI, 0, wifi_reinit);
-            ctx.fds().device_id.push_back(ctx.fds().wifi);
-            ctx.identity().communicate_status[1] = '1';
-            system("echo 1 > /sys/class/leds/yellow/brightness");
-        }
-    }
 
-    ctx.fds().bt = bluetooth_open(ctx.identity().bt_mac);
-    if (-1 == ctx.fds().bt)
-    {
-        ctx.identity().bt_mac = "";
-        LOG_ERROR("dev_init", "%s", "-> No blue_tooth device");
-    }
-    else
-    {
-        ctx.commManager().addCommunicateNode(BT, ctx.fds().bt);
-        ctx.commManager().callbackRgist(BT, 0, bt_reinit);
-        ctx.fds().device_id.push_back(ctx.fds().bt);
-#ifdef DEBUG
-        LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
-#endif
-        ctx.identity().communicate_status[3] = '1';
-        system("echo 1 > /sys/class/leds/green/brightness");
-    }
-    sleep(2);
+    // 使用 CommunicationFactory 创建所有通信策略
+    auto strategies = sap::CommunicationFactory::createAll();
 
-    // 初始化网口1作为服务器端口，接收其他节点数据
-    std::string eth0_ip = CFG_STR("network.lan", "zd_local_ip", "192.168.31.101");
-    std::string ifconfig_eth0 = "ifconfig eth0 " + eth0_ip + " netmask 255.255.255.0";
-    system(ifconfig_eth0.c_str());
-    sleep(2);
-    ctx.fds().lan_server = socket(AF_INET, SOCK_STREAM, 0);
-    if (ctx.fds().lan_server < 0)
-    {
-#ifdef DEBUG
-        LOG_ERROR("dev_init", "lan: socket create error: %s", strerror(errno));
-#endif
-    }
-    else
-    {
-        struct sockaddr_in Llan_ser_addr;
-        memset(&Llan_ser_addr, 0, sizeof(Llan_ser_addr));
-        Llan_ser_addr.sin_family = AF_INET;
-        Llan_ser_addr.sin_addr.s_addr = inet_addr(cfg_zd_lan_ip().c_str());
-        Llan_ser_addr.sin_port = htons(cfg_zd_lan_port());
-        if (bind(ctx.fds().lan_server, (struct sockaddr*)&Llan_ser_addr, sizeof(Llan_ser_addr)) < 0) {
-            LOG_ERROR("dev_init", "bind fdL_lan failed: %s", strerror(errno));
-            close(ctx.fds().lan_server);
-            ctx.fds().lan_server = -1;
-        } else {
-            if (listen(ctx.fds().lan_server, 5) < 0) {
-                LOG_ERROR("dev_init", "listen fdL_lan failed: %s", strerror(errno));
-                close(ctx.fds().lan_server);
-                ctx.fds().lan_server = -1;
+    for (auto& strategy : strategies) {
+        int fd = strategy->initialize();
+        if (fd < 0) {
+            LOG_ERROR("dev_init", "Failed to initialize %s", strategy->typeName().c_str());
+            continue;
+        }
+
+        int id = strategy->deviceId();
+
+        // 客户端连接需要注册到 commManager（服务器监听 socket 不需要）
+        if (strategy->isClient()) {
+            ctx.commManager().addCommunicateNode(id, fd);
+            // 注册重初始化回调（使用原有的 reinit 函数）
+            switch (id) {
+                case 1: ctx.commManager().callbackRgist(id, 0, lora_reinit); break;
+                case 2: ctx.commManager().callbackRgist(id, 0, wifi_reinit); break;
+                case 3: ctx.commManager().callbackRgist(id, 0, bt_reinit); break;
+                case 4: ctx.commManager().callbackRgist(id, 0, lan_reinit); break;
             }
+            ctx.fds().device_id.push_back(fd);
         }
-#ifdef DEBUG
-        LOG_INFO("dev_init", "Init success: LanLSS. Device descriptor = %d", ctx.fds().lan_server);
-#endif
+
+        // 更新对应的 fd 和 communicate_status
+        switch (id) {
+            case 1: ctx.fds().lora = fd; break;
+            case 2: ctx.fds().wifi = fd; ctx.fds().flag_wifi = 1; break;
+            case 3: ctx.fds().bt = fd; break;
+            case 4: ctx.fds().lan = fd; break;
+            case 5: ctx.fds().lan_server = fd; break;
+        }
+
+        // communicate_status 索引：LoRa=0, WiFi=1, LAN=2, BT=3
+        if (id >= 1 && id <= 4) {
+            ctx.identity().communicate_status[id - 1] = '1';
+        }
+
+        LOG_INFO("dev_init", "Init success: %s, fd=%d", strategy->typeName().c_str(), fd);
+        sleep(2);
     }
 
-    // 初始化网口2作为客户端，与ISR进行有线注册连接
-    std::string eth1_ip = CFG_STR("network.lan", "local_ip", "192.168.2.235");
-    std::string ifconfig_cmd = "ifconfig eth1 " + eth1_ip + " netmask 255.255.255.0";
-    system(ifconfig_cmd.c_str());
-    sleep(2);
-    ctx.fds().lan = socket(AF_INET, SOCK_STREAM, 0);
-    if (ctx.fds().lan < 0)
-    {
-#ifdef DEBUG
-        LOG_ERROR("dev_init", "lan: socket create error: %s", strerror(errno));
-#endif
-    }
-    else
-    {
-        struct sockaddr_in lan_ser_addr;
-        memset(&lan_ser_addr, 0, sizeof(lan_ser_addr));
-        lan_ser_addr.sin_family = AF_INET;
-        lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
-        lan_ser_addr.sin_port = htons(cfg_lan_port());
-#ifdef DEBUG
-        LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
-#endif
-        /* TODO: 此处使用阻塞connect，若对端不可达会长时间阻塞。建议后续改为 connect_nonb 非阻塞方式 */
-        int lan_fd_connect = connect(ctx.fds().lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr));
-        if (lan_fd_connect < 0)
-        {
-#ifdef DEBUG
-            LOG_ERROR("dev_init", "lan: connect: %s", strerror(errno));
-#endif
-            close(ctx.fds().lan);
-            ctx.fds().lan = -1;
-        }
-        else
-        {
-#ifdef DEBUG
-            LOG_INFO("dev_init", "%s", "lanISR: connect server success");
-            LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
-#endif
-            ctx.commManager().addCommunicateNode(LAN, ctx.fds().lan);
-            ctx.commManager().callbackRgist(LAN, 0, lan_reinit);
-            ctx.fds().device_id.push_back(ctx.fds().lan);
-            ctx.identity().communicate_status[2] = '1';
-        }
+    // 特殊处理：获取蓝牙 MAC 地址
+    auto* btStrategy = dynamic_cast<sap::BluetoothStrategy*>(
+        [&strategies]() -> sap::ICommunicationStrategy* {
+            for (auto& s : strategies) {
+                if (s->deviceId() == 3) return s.get();
+            }
+            return nullptr;
+        }());
+    if (btStrategy && btStrategy->isConnected()) {
+        ctx.identity().bt_mac = btStrategy->getDeviceMac();
     }
 
-    if (ctx.fds().device_id.empty())
-    {
+    if (ctx.fds().device_id.empty()) {
         return -1;
     }
-    return ctx.fds().device_id.size();
+    return (int)ctx.fds().device_id.size();
 }
 
 void get_mac()

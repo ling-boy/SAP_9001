@@ -7,6 +7,7 @@
 #include "core/communication_strategy.h"
 #include "infra/logger.h"
 #include "hal/bluetooth.h"
+#include <cstdlib>
 
 namespace sap {
 
@@ -18,9 +19,11 @@ public:
     int initialize() override {
         fd_ = bluetooth_open(mac_);
         if (fd_ >= 0) {
+            // 点亮绿色 LED
+            system("echo 1 > /sys/class/leds/green/brightness");
             LOG_INFO("bluetooth", "Bluetooth initialized, fd=%d, mac=%s", fd_, mac_.c_str());
         } else {
-            LOG_ERROR("bluetooth", "Bluetooth initialization failed");
+            LOG_ERROR("bluetooth", "%s", "Bluetooth initialization failed");
         }
         return fd_;
     }

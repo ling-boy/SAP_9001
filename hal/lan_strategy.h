@@ -12,6 +12,7 @@
 #include <arpa/inet.h>
 #include <unistd.h>
 #include <cstring>
+#include <cstdlib>
 
 namespace sap {
 
@@ -21,12 +22,21 @@ namespace sap {
 class LanStrategy : public CommunicationStrategyBase {
 public:
     int initialize() override {
+        // 1. 配置 eth1 IP 地址
+        std::string eth1_ip = CFG_STR("network.lan", "local_ip", "192.168.2.235");
+        std::string ifconfig_cmd = "ifconfig eth1 " + eth1_ip + " netmask 255.255.255.0";
+        LOG_INFO("lan", "Configuring eth1: %s", eth1_ip.c_str());
+        system(ifconfig_cmd.c_str());
+        sleep(2);
+
+        // 2. 创建 socket
         fd_ = socket(AF_INET, SOCK_STREAM, 0);
         if (fd_ < 0) {
             LOG_ERROR("lan", "Socket create failed: %s", strerror(errno));
             return -1;
         }
 
+        // 3. 连接 ISR
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
@@ -64,12 +74,21 @@ public:
 class LanServerStrategy : public CommunicationStrategyBase {
 public:
     int initialize() override {
+        // 1. 配置 eth0 IP 地址
+        std::string eth0_ip = CFG_STR("network.lan", "zd_local_ip", "192.168.31.101");
+        std::string ifconfig_cmd = "ifconfig eth0 " + eth0_ip + " netmask 255.255.255.0";
+        LOG_INFO("lan_server", "Configuring eth0: %s", eth0_ip.c_str());
+        system(ifconfig_cmd.c_str());
+        sleep(2);
+
+        // 2. 创建 socket
         fd_ = socket(AF_INET, SOCK_STREAM, 0);
         if (fd_ < 0) {
             LOG_ERROR("lan_server", "Socket create failed: %s", strerror(errno));
             return -1;
         }
 
+        // 3. 绑定地址
         struct sockaddr_in addr;
         memset(&addr, 0, sizeof(addr));
         addr.sin_family = AF_INET;
@@ -83,6 +102,7 @@ public:
             return -1;
         }
 
+        // 4. 开始监听
         if (listen(fd_, 5) < 0) {
             LOG_ERROR("lan_server", "Listen failed: %s", strerror(errno));
             close(fd_);
@@ -103,6 +123,7 @@ public:
 
     std::string typeName() const override { return "LAN_Server"; }
     int deviceId() const override { return 5; }
+    bool isClient() const override { return false; }  // 服务器监听 socket
 };
 
 } // namespace sap

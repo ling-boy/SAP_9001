@@ -66,6 +66,13 @@ public:
      * @brief 设置文件描述符
      */
     virtual void setFileDescriptor(int fd) = 0;
+
+    /**
+     * @brief 是否为客户端连接（需要注册到 commManager）
+     * @details 客户端连接（LoRa/WiFi/BT/LAN）返回 true
+     *          服务器监听 socket 返回 false
+     */
+    virtual bool isClient() const = 0;
 };
 
 /**
@@ -76,6 +83,7 @@ public:
     bool isConnected() const override { return fd_ >= 0; }
     int fileDescriptor() const override { return fd_; }
     void setFileDescriptor(int fd) override { fd_ = fd; }
+    bool isClient() const override { return true; }  // 默认为客户端
 
 protected:
     int fd_ = -1;
