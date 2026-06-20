@@ -8,15 +8,15 @@
 #include "protocol/protocol_process.h"
 #include "hal/gps.h"
 #include "infra/message_queue.h"
-#include <iostream>
+#include "infra/logger.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <math.h>
-using namespace std;
+#include <cerrno>
 
 /* 外部全局变量（在 modbus_9001.cpp 中定义） */
-extern MessageQueue<string> transMessage;
+extern MessageQueue<std::string> transMessage;
 extern pthread_mutex_t mtx_sensor;
 extern pthread_cond_t cond_sensor;
 extern int iS_getsensor;
@@ -27,7 +27,7 @@ extern int wdtShipId;
 /* ====== SensorDriver 基类实现 ====== */
 
 SensorDriver::SensorDriver(CSoftwareWdt* wdt, int wdt_id,
-                           const string& port_info, const string& device, int baud)
+                           const std::string& port_info, const std::string& device, int baud)
     : wdt_(wdt), wdt_id_(wdt_id), port_info_(port_info), device_(device), baud_(baud)
 {
 }
@@ -84,7 +84,7 @@ bool SensorDriver::readSensorValue(modbus_t* ctx, const SensorConfig& config, do
     case ConversionType::FLOAT32_SWAP:
         regs = modbus_read_registers(ctx, config.register_address, config.register_count, tab_reg);
         if (regs == -1) {
-            fprintf(stderr, "%s\n", modbus_strerror(errno));
+            LOG_ERROR("sensor", "%s", modbus_strerror(errno));
             return false;
         }
         {
@@ -108,7 +108,7 @@ bool SensorDriver::readSensorValue(modbus_t* ctx, const SensorConfig& config, do
     case ConversionType::UINT16_SCALE:
         regs = modbus_read_registers(ctx, config.register_address, config.register_count, tab_reg);
         if (regs == -1) {
-            fprintf(stderr, "%s\n", modbus_strerror(errno));
+            LOG_ERROR("sensor", "%s", modbus_strerror(errno));
             return false;
         }
         value = tab_reg[0] * config.scale_factor;
@@ -117,7 +117,7 @@ bool SensorDriver::readSensorValue(modbus_t* ctx, const SensorConfig& config, do
     case ConversionType::UINT16_RAW:
         regs = modbus_read_registers(ctx, config.register_address, config.register_count, tab_reg);
         if (regs == -1) {
-            fprintf(stderr, "%s\n", modbus_strerror(errno));
+            LOG_ERROR("sensor", "%s", modbus_strerror(errno));
             return false;
         }
         value = tab_reg[0];
@@ -126,7 +126,7 @@ bool SensorDriver::readSensorValue(modbus_t* ctx, const SensorConfig& config, do
     case ConversionType::INPUT_REG_FLOAT32:
         regs = modbus_read_input_registers(ctx, config.register_address, config.register_count, tab_reg);
         if (regs == -1) {
-            fprintf(stderr, "%s\n", modbus_strerror(errno));
+            LOG_ERROR("sensor", "%s", modbus_strerror(errno));
             return false;
         }
         {
@@ -143,38 +143,38 @@ bool SensorDriver::readSensorValue(modbus_t* ctx, const SensorConfig& config, do
 
 void SensorDriver::run()
 {
-    vector<SensorConfig> configs = getSensorConfigs();
-    string st = getHJ212ST();
-    string hj_MN = get_MN();
-    string hj_Flag = "4";
+    std::vector<SensorConfig> configs = getSensorConfigs();
+    std::string st = getHJ212ST();
+    std::string hj_MN = get_MN();
+    std::string hj_Flag = "4";
     size_t sensor_count = configs.size();
     if (sensor_count == 0) {
-        fprintf(stderr, "传感器配置为空，无法启动采集\n");
+        LOG_ERROR("sensor", "传感器配置为空，无法启动采集");
         return;
     }
 
     /* 初始化 Modbus RTU */
     modbus_t* ctx = modbus_new_rtu(device_.c_str(), baud_, 'N', 8, 1);
     if (ctx == NULL) {
-        fprintf(stderr, "modbus_new_rtu failed\n");
+        LOG_ERROR("sensor", "modbus_new_rtu failed");
         return;
     }
     modbus_rtu_set_serial_mode(ctx, MODBUS_RTU_RS485);
     modbus_rtu_set_rts(ctx, MODBUS_RTU_RTS_DOWN);
     modbus_set_debug(ctx, TRUE);
     if (modbus_connect(ctx) == -1) {
-        fprintf(stderr, "Connection failed: %s\n", modbus_strerror(errno));
+        LOG_ERROR("sensor", "Connection failed: %s", modbus_strerror(errno));
         modbus_free(ctx);
         return;
     }
-    cout << "传感器连接成功!" << endl;
+    LOG_INFO("sensor", "传感器连接成功!");
 
-    vector<double> sensor_values(sensor_count, -999);
+    std::vector<double> sensor_values(sensor_count, -999);
     size_t index_flag = 0;
 
     while (1) {
-        cout << "开始获取传感器" << index_flag + 1 << "数据" << endl;
-        string accessdev_gps = gps_get_location();
+        LOG_INFO("sensor", "开始获取传感器%zu数据", index_flag + 1);
+        std::string accessdev_gps = gps_get_location();
         modbus_set_slave(ctx, configs[index_flag].slave_address);
 
         double value = -999;
@@ -183,37 +183,37 @@ void SensorDriver::run()
             sleep(configs[index_flag].sleep_seconds);
         }
         else {
-            cout << "读取传感器" << index_flag + 1 << "数据失败" << endl;
+            LOG_WARN("sensor", "读取传感器%zu数据失败", index_flag + 1);
             sleep(4);
         }
         wdt_->KeepSoftwareWdtAlive(wdt_id_);
-        printf("thread of sensor feed dog success\n");
+        LOG_INFO("sensor", "thread of sensor feed dog success");
 
         /* 最后一个传感器读取完成后，打包 HJ212 数据 */
         if (index_flag == sensor_count - 1) {
-            string hj_QN = time_now_to_string();
+            std::string hj_QN = time_now_to_string();
 
             /* 打印所有传感器数据 */
-            cout << "--------------------------------" << endl;
-            cout << "获取一轮后的数据如下：" << endl;
+            LOG_INFO("sensor", "--------------------------------");
+            LOG_INFO("sensor", "获取一轮后的数据如下：");
             for (size_t i = 0; i < sensor_count; i++) {
-                printf("%s: %f\n", configs[i].name.c_str(), sensor_values[i]);
+                LOG_INFO("sensor", "%s: %f", configs[i].name.c_str(), sensor_values[i]);
             }
-            cout << "--------------------------------" << endl;
+            LOG_INFO("sensor", "--------------------------------");
 
             /* 构建 HJ212 数据段 */
-            string data_segment = "QN=" + hj_QN + ";ST=" + st + ";CN=2011;PW=123456;MN=" + hj_MN +
+            std::string data_segment = "QN=" + hj_QN + ";ST=" + st + ";CN=2011;PW=123456;MN=" + hj_MN +
                                   ";Flag=" + hj_Flag + ";CP=&&Gps=" + accessdev_gps + ";";
             for (size_t i = 0; i < sensor_count; i++) {
                 char buf[256];
-                string fmt = "%s-Rtd=" + string(configs[i].rtd_format) + ";";
+                std::string fmt = "%s-Rtd=" + std::string(configs[i].rtd_format) + ";";
                 /* 验证格式字符串中 '%' 出现次数：预期2个（一个 %s，一个浮点格式） */
                 int pct_count = 0;
                 for (size_t j = 0; j < fmt.size(); j++) {
                     if (fmt[j] == '%') pct_count++;
                 }
                 if (pct_count != 2) {
-                    fprintf(stderr, "Invalid format string for sensor %s: %s\n",
+                    LOG_ERROR("sensor", "Invalid format string for sensor %s: %s",
                             configs[i].name.c_str(), fmt.c_str());
                     fmt = "%s-Rtd=%010.3lf;";
                 }
@@ -224,20 +224,20 @@ void SensorDriver::run()
 
             /* 封装 HJ212 数据包 */
             int len_origin = data_segment.length();
-            string data_len = ensureLen_4(len_origin);
+            std::string data_len = ensureLen_4(len_origin);
             unsigned int hjcrc = CRC16_Checkout((unsigned char*)data_segment.c_str(), len_origin);
-            string hj212pacet = ensure_crc4_packet(hjcrc, data_len, data_segment);
-            cout << "HJ212数据包:" << hj212pacet << endl;
+            std::string hj212pacet = ensure_crc4_packet(hjcrc, data_len, data_segment);
+            LOG_INFO("sensor", "HJ212数据包:%s", hj212pacet.c_str());
 
             /* 封装 06 协议并推送到队列 */
-            string data06 = packet06(hj212pacet, port_info_);
-            cout << "06数据包:" << data06 << endl;
+            std::string data06 = packet06(hj212pacet, port_info_);
+            LOG_INFO("sensor", "06数据包:%s", data06.c_str());
             transMessage.push(data06);
 
             /* 等待下一次采集触发 */
             int S = pthread_mutex_lock(&mtx_sensor);
             if (S != 0) {
-                perror("pthread_mutex_lock()");
+                LOG_ERROR("sensor", "pthread_mutex_lock(): %s", strerror(errno));
                 sleep(4);
                 index_flag = (index_flag + 1) % sensor_count;
                 continue;
@@ -271,7 +271,7 @@ void SensorDriver::run()
 /* ====== 船载传感器驱动 ====== */
 
 /** @brief 船载传感器配置（13个 Modbus 从站，部分从站多寄存器拆分为独立条目） */
-static vector<SensorConfig> getShipSensorConfigs()
+static std::vector<SensorConfig> getShipSensorConfigs()
 {
     return {
         { 1,  1,    2, ConversionType::FLOAT32,       1.0,    "w01010", "溶解氧",    1, "%010.3lf" },
@@ -308,11 +308,11 @@ public:
     ShipSensorDriver(CSoftwareWdt* wdt, int wdt_id)
         : SensorDriver(wdt, wdt_id, "100", "/dev/ttymxc2", 9600) {}
 
-    vector<SensorConfig> getSensorConfigs() override {
+    std::vector<SensorConfig> getSensorConfigs() override {
         return getShipSensorConfigs();
     }
 
-    string getHJ212ST() override {
+    std::string getHJ212ST() override {
         return "26";
     }
 };
@@ -332,7 +332,7 @@ void* get_ship_data(void* arg)
 /* ====== 大气传感器驱动 ====== */
 
 /** @brief 大气传感器配置（11个 Modbus 从站，部分从站多寄存器拆分为独立条目） */
-static vector<SensorConfig> getGasSensorConfigs()
+static std::vector<SensorConfig> getGasSensorConfigs()
 {
     return {
         { 1,  6, 1, ConversionType::UINT16_SCALE, 0.1,  "a21005", "CO",     2, "%08.2lf" },
@@ -361,11 +361,11 @@ public:
     GasSensorDriver(CSoftwareWdt* wdt, int wdt_id)
         : SensorDriver(wdt, wdt_id, "010", "/dev/ttymxc2", 9600) {}
 
-    vector<SensorConfig> getSensorConfigs() override {
+    std::vector<SensorConfig> getSensorConfigs() override {
         return getGasSensorConfigs();
     }
 
-    string getHJ212ST() override {
+    std::string getHJ212ST() override {
         return "31";
     }
 };

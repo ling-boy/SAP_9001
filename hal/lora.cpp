@@ -5,10 +5,9 @@
 #include <termios.h>
 #include <sys/select.h>
 #include <string>
-#include <iostream>
 #include "hal/lora.h"
 #include "hal/usbctl.h"
-using namespace std;
+#include "infra/logger.h"
 /**
  * @brief 打开LoRa串口设备并配置通信参数
  *

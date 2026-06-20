@@ -14,7 +14,6 @@
 #include <sys/select.h>
 #include <string>
 #include "hal/usbctl.h"
-#include <iostream>
 #include <queue>
 #include "infra/software_wdt.h"
 

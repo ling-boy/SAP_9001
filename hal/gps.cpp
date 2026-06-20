@@ -6,18 +6,18 @@
  */
 #include "hal/gps.h"
 #include "hal/usbctl.h"
+#include "infra/logger.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include <iostream>
+#include <string>
 #include <mutex>
-using namespace std;
 
 /* GPS 数据内部存储（模块私有） */
-static string s_gps_lat = "NFFFF";
-static string s_gps_lon = "EFFFFF";
-static mutex s_mutex_gps;
+static std::string s_gps_lat = "NFFFF";
+static std::string s_gps_lon = "EFFFFF";
+static std::mutex s_mutex_gps;
 
 /**
  * @brief 解析GPS数据，提取经纬度信息
@@ -65,11 +65,10 @@ static int process_gps(char* line, char* lat, int lat_size, char* flag_lat, int 
  */
 void* GET_GPS(void* arg)
 {
-#ifdef DEBUG
-    cout << "Start thread: GET_GPS()" << endl;
-#endif
+    (void)arg;
+    LOG_INFO("gps", "Start GPS thread");
     if (system("/home/root/gps_test.sh &") < 0) {
-        printf("Warning: system() failed to launch gps_test.sh\n");
+        LOG_WARN("gps", "system() failed to launch gps_test.sh");
     }
     sleep(60);
     int ret;
@@ -83,17 +82,13 @@ void* GET_GPS(void* arg)
     fd = open((const char*)dev, O_RDWR | O_NOCTTY);
     if (-1 == fd)
     {
-#ifdef DEBUG
-        cout << "Open GPS device error!" << endl;
-#endif
+        LOG_ERROR("gps", "Open GPS device error!");
     }
     else {
-#ifdef DEBUG
-        cout << "Open GPS device success!" << endl;
-#endif
+        LOG_INFO("gps", "Open GPS device success");
         ret = set_opt1(fd, 9600, 8, 'n', 1);
         if (ret < 0) {
-            fprintf(stderr, "GPS: set_opt1 failed\n");
+            LOG_ERROR("gps", "set_opt1 failed");
             close(fd);
             return NULL;
         }
@@ -142,21 +137,21 @@ void* GET_GPS(void* arg)
             else {
                 int lat_len = strlen(lat);
                 int lon_len = strlen(lon);
-                string s_lon = "";
+                std::string s_lon = "";
                 for (int j = 0; j < lon_len; j++) {
                     if (j == 5) continue; /* 跳过小数点 */
                     s_lon += lon[j];
                 }
-                string s_lat = "";
+                std::string s_lat = "";
                 for (int j = 0; j < lat_len; j++) {
                     if (j == 4) continue; /* 跳过小数点 */
                     s_lat += lat[j];
                 }
 
                 {
-                    lock_guard<mutex> lock(s_mutex_gps);
-                    s_gps_lat = string(f_lat) + s_lat;
-                    s_gps_lon = string(f_lon) + s_lon;
+                    std::lock_guard<std::mutex> lock(s_mutex_gps);
+                    s_gps_lat = std::string(f_lat) + s_lat;
+                    s_gps_lon = std::string(f_lon) + s_lon;
                 }
             }
             memset(buf, 0, sizeof(buf));
@@ -166,20 +161,20 @@ void* GET_GPS(void* arg)
     return NULL;
 }
 
-string gps_get_latitude()
+std::string gps_get_latitude()
 {
-    lock_guard<mutex> lock(s_mutex_gps);
+    std::lock_guard<std::mutex> lock(s_mutex_gps);
     return s_gps_lat;
 }
 
-string gps_get_longitude()
+std::string gps_get_longitude()
 {
-    lock_guard<mutex> lock(s_mutex_gps);
+    std::lock_guard<std::mutex> lock(s_mutex_gps);
     return s_gps_lon;
 }
 
-string gps_get_location()
+std::string gps_get_location()
 {
-    lock_guard<mutex> lock(s_mutex_gps);
+    std::lock_guard<std::mutex> lock(s_mutex_gps);
     return s_gps_lat + s_gps_lon;
 }

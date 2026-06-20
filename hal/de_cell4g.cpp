@@ -1,4 +1,13 @@
+#include <stdio.h>
+#include <string.h>
+#include <unistd.h>
+#include <sys/socket.h>
+#include <sys/ioctl.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <net/if.h>
 #include "hal/de_cell4g.h"
+#include "infra/logger.h"
 
 /**
  * @brief 初始化4G模块，通过PPP拨号建立蜂窝网络连接
@@ -19,7 +28,7 @@ int hard4g_init(char *net_name)
         while (retry_count-- && success)
         {
                 /* 启动PPP拨号脚本，后台运行连接到vnet.mobi网络 */
-                system("/home/root/g2020/mokuai/4g/ppp/ppp/quectel-pppd.sh /dev/ttyUSB5 "" "" vnet.mobi &");
+                system("/home/root/g2020/mokuai/4g/ppp/ppp/quectel-pppd.sh /dev/ttyUSB5 \"\" \"\" vnet.mobi &");
                 /* PPP协商需要较长时间，等待8秒确保拨号完成 */
                 sleep(8);
                 if (cell4g_detect(net_name) == 0)
@@ -54,7 +63,7 @@ int cell4g_detect(char *net_name)
                 char c = net_name[i];
                 if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
                       (c >= '0' && c <= '9') || c == '.')) {
-                        printf("Invalid net_name: contains disallowed character\n");
+                        LOG_ERROR("cell4g", "Invalid net_name: contains disallowed character");
                         return -1;
                 }
         }
@@ -71,7 +80,7 @@ int cell4g_detect(char *net_name)
         /* Get socket file descriptor */
         if ((sock_fd = socket(PF_INET, SOCK_DGRAM, 0)) == -1)
         {
-                perror("socket");
+                LOG_ERROR("cell4g", "socket() failed: %s", strerror(errno));
                 return -1;
         }
 
@@ -81,7 +90,7 @@ int cell4g_detect(char *net_name)
 
         if (ioctl(sock_fd, SIOCGIFADDR, &ifr) < 0)
         {
-                printf(":No Such Device %s\n", net_name);
+                LOG_ERROR("cell4g", "No such device: %s", net_name);
                 close(sock_fd);
                 return -1;
         }
@@ -89,13 +98,13 @@ int cell4g_detect(char *net_name)
         memcpy(&my_addr, &ifr.ifr_addr, sizeof(my_addr));
         strncpy(ipaddr, inet_ntoa(my_addr.sin_addr), sizeof(ipaddr) - 1);
         ipaddr[sizeof(ipaddr) - 1] = '\0';
-        printf("Network addresss: %s\r\n", ipaddr);
+        LOG_INFO("cell4g", "Network address: %s", ipaddr);
         if (strlen(ipaddr) == 0 || strcmp(ipaddr, "0.0.0.0") == 0){
-                printf("ip is not vaild\r\n");
+                LOG_ERROR("cell4g", "IP is not valid");
                 close(sock_fd);
                 return -1;
         }
-                
+
         close(sock_fd);
         return 0;
 }
@@ -119,17 +128,17 @@ int cell4g_ip_port_check(char *remote_ip, int remote_port)
         sockfd = socket(AF_INET, SOCK_STREAM, 0);
         if (sockfd < 0)
         {
-                printf("Connect to the server error\n");
+                LOG_ERROR("cell4g", "Connect to server error");
                 return -1;
         }
         else
         {
-                struct sockaddr_in svraddr; //绑定地址(ip和端口号)
+                struct sockaddr_in svraddr;
                 memset(&svraddr, 0, sizeof(svraddr));
                 svraddr.sin_family = AF_INET;
                 svraddr.sin_port = htons(remote_port);
                 if (inet_pton(AF_INET, remote_ip, &svraddr.sin_addr) <= 0) {
-                    printf("inet_pton: invalid address %s\n", remote_ip);
+                    LOG_ERROR("cell4g", "inet_pton: invalid address %s", remote_ip);
                     close(sockfd);
                     return -1;
                 }
@@ -142,19 +151,20 @@ int cell4g_ip_port_check(char *remote_ip, int remote_port)
                 int ret = connect(sockfd, (struct sockaddr *)&svraddr, sizeof(svraddr));
                 if (ret < 0)
                 {
+                        LOG_ERROR("cell4g", "Connect to %s:%d failed", remote_ip, remote_port);
                         close(sockfd);
                         return -1;
                 }
                 else{
                     char buf[]="Device login\n";
                     if (write(sockfd, buf, sizeof(buf) - 1) < 0) {
-                        printf("write login message failed\n");
+                        LOG_ERROR("cell4g", "Write login message failed");
                         close(sockfd);
                         return -1;
                     }
                 }
         }
-        printf("Connect server success\r\n");
+        LOG_INFO("cell4g", "Connect server %s:%d success", remote_ip, remote_port);
         return sockfd;
 }
 

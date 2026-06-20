@@ -7,8 +7,7 @@
 #include <string>
 #include "hal/bluetooth.h"
 #include "hal/usbctl.h"
-#include <iostream>
-using namespace std;
+#include "infra/logger.h"
 
 
 /**
@@ -21,7 +20,7 @@ using namespace std;
  * @return 2 找到g2020设备，meg中已包含MAC地址
  * @return 3 扫描结束（收到END标记）
  */
-int blue_proc_message(string &meg)
+int blue_proc_message(std::string &meg)
 {
     if(meg.empty())
     {
@@ -56,7 +55,7 @@ int blue_proc_message(string &meg)
  * @return >0  找到g2020设备，返回串口文件描述符（调用方负责关闭）
  * @return -1  未找到设备或串口打开失败
  */
-int bluetooth_open(string &device_mac)
+int bluetooth_open(std::string &device_mac)
 {
     int fd = -1, ret;
     char buf[61];
@@ -65,8 +64,8 @@ int bluetooth_open(string &device_mac)
     uint8_t OPEN_VISUAL[] = "AT+SPP=1\r\n"; /* AT+SPP=1: 设置蓝牙可见，允许被扫描 */
     uint8_t AT_SCAN[] = "AT+SCAN?\r\n";     /* AT+SCAN?: 启动蓝牙设备扫描 */
     uint8_t DISCONNECT[] = "AT+DISCON=1\r\n"; /* AT+DISCON=1: 断开当前蓝牙连接 */
-    string mac;
-    string pro_message = "";
+    std::string mac;
+    std::string pro_message = "";
     struct timeval timeout;
     fd_set fdset;
     FD_ZERO(&fdset);
@@ -90,7 +89,7 @@ int bluetooth_open(string &device_mac)
     {
         ret = set_opt1(fd, 115200, 8, 'n', 1);
         if (ret < 0) {
-            printf("ERROR: bluetooth set_opt1 failed\n");
+            LOG_ERROR("bluetooth", "set_opt1 failed");
             close(fd);
             return -1;
         }
@@ -99,23 +98,23 @@ int bluetooth_open(string &device_mac)
         system("/home/root/jd_open.sh");
         sleep(1);
         if (write_port(fd, DISCONNECT, strlen((const char*)DISCONNECT)) < 0) {
-            printf("Warning: write DISCONNECT failed\n");
+            LOG_WARN("bluetooth", "write DISCONNECT failed");
         }
         /* jd_close.sh: 拉高switch管脚，蓝牙模块退出AT命令模式 */
         system("/home/root/jd_close.sh");
         /* 发送重启指令，等待模块复位完成 */
         if (write_port(fd, (const char*)RST, strlen((const char*)RST)) < 0) {
-            printf("Warning: write RST failed\n");
+            LOG_WARN("bluetooth", "write RST failed");
         }
         sleep(1);
         ret = select(fd + 1, &fdset, NULL, NULL, &timeout);
         switch (ret)
         {
         case -1:
-            printf("->> Error occurs when select() \n");
+            LOG_ERROR("bluetooth", "select() error");
             break;
         case 0:
-            printf("->> Select() timeout \n");
+            LOG_WARN("bluetooth", "select() timeout");
             break;
         default:
             if (FD_ISSET(fd, &fdset))
@@ -132,7 +131,7 @@ int bluetooth_open(string &device_mac)
                         /* 设置蓝牙可见 */
                         ret = write_port(fd, OPEN_VISUAL, strlen((const char*)OPEN_VISUAL));
                         if (ret < 0) {
-                            printf("ERROR: write OPEN_VISUAL failed\n");
+                            LOG_ERROR("bluetooth", "write OPEN_VISUAL failed");
                             close(fd);
                             return -1;
                         }
@@ -140,7 +139,7 @@ int bluetooth_open(string &device_mac)
                         /* 开始扫描附近蓝牙设备 */
                         ret = write_port(fd, AT_SCAN, strlen((const char*)AT_SCAN));
                         if (ret < 0) {
-                            printf("ERROR: write AT_SCAN failed\n");
+                            LOG_ERROR("bluetooth", "write AT_SCAN failed");
                             close(fd);
                             return -1;
                         }
@@ -177,7 +176,7 @@ int bluetooth_open(string &device_mac)
                                     else if(ret_proc_mess == 2)
                                     {
                                         device_mac = pro_message;
-                                        cout << "g2020: " << device_mac << endl;
+                                        LOG_INFO("bluetooth", "g2020 found: %s", device_mac.c_str());
                                         return fd;
                                     }
                                     else if(ret_proc_mess == 3)

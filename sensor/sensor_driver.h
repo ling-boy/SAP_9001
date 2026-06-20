@@ -12,11 +12,10 @@
 #include <stdint.h>
 #include <modbus/modbus.h>
 #include "infra/software_wdt.h"
-using namespace std;
 
 /** @brief HJ212 协议传感器值结构体 */
 struct SensorValue {
-    string code;     ///< HJ212 编码，如 "a21026"
+    std::string code;     ///< HJ212 编码，如 "a21026"
     double value;    ///< 传感器值
 };
 
@@ -36,8 +35,8 @@ struct SensorConfig {
     int register_count;        ///< 读取寄存器数量
     ConversionType conversion; ///< 数据转换方式
     double scale_factor;       ///< 缩放因子（仅 UINT16_SCALE 使用）
-    string hj212_code;         ///< HJ212 协议编码
-    string name;               ///< 传感器名称（用于日志）
+    std::string hj212_code;    ///< HJ212 协议编码
+    std::string name;          ///< 传感器名称（用于日志）
     int sleep_seconds;         ///< 读取后等待时间（秒）
     const char* rtd_format;    ///< HJ212 Rtd 格式字符串（如 "%010.3lf" 或 "%08.2lf"）
 };
@@ -58,7 +57,7 @@ public:
      * @param baud      波特率
      */
     SensorDriver(CSoftwareWdt* wdt, int wdt_id,
-                 const string& port_info, const string& device, int baud = 9600);
+                 const std::string& port_info, const std::string& device, int baud = 9600);
     virtual ~SensorDriver();
 
     /**
@@ -72,13 +71,13 @@ protected:
      * @brief 获取传感器配置列表（由子类实现）
      * @return 传感器配置向量
      */
-    virtual vector<SensorConfig> getSensorConfigs() = 0;
+    virtual std::vector<SensorConfig> getSensorConfigs() = 0;
 
     /**
      * @brief 获取 HJ212 ST 字段（由子类实现）
      * @return ST 字符串，如 "26"（水质）或 "31"（大气）
      */
-    virtual string getHJ212ST() = 0;
+    virtual std::string getHJ212ST() = 0;
 
     /**
      * @brief 从 Modbus 寄存器读取传感器值
@@ -91,8 +90,8 @@ protected:
 
     CSoftwareWdt* wdt_;
     int wdt_id_;
-    string port_info_;
-    string device_;
+    std::string port_info_;
+    std::string device_;
     int baud_;
 };
 

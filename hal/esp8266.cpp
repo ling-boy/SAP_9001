@@ -8,9 +8,8 @@
 #include "hal/esp8266.h"
 #include <string.h>
 #include <string>
-using namespace std;
+#include "infra/logger.h"
 
-#define DEBUG
 #define SERVERPORT 8080
 
 #define USE_PROTOCOL USE_TCP
@@ -42,21 +41,19 @@ int esp8266_open()
     fd = open_port(1);
     if (-1 == fd)
     {
-#ifdef DEBUG
-        printf("ERROR:Initaled ESP8266 Fail\n");
-#endif
+        LOG_ERROR("esp8266", "Init ESP8266 fail");
         return -1;
     }
     ret = set_opt1(fd, 115200, 8, 'n', 1);
     if (ret < 0) {
-        printf("ERROR: ESP8266 set_opt1 failed\n");
+        LOG_ERROR("esp8266", "set_opt1 failed");
         close(fd);
         return -1;
     }
     FD_SET(fd, &fdset);
     /* 发送AT指令测试设备是否正常响应 */
     if (write_port(fd, (uint8_t*)"AT\r\n", 4) < 0) {
-        printf("ERROR: write AT failed\n");
+        LOG_ERROR("esp8266", "write AT failed");
         close(fd);
         return -1;
     }
@@ -65,10 +62,10 @@ int esp8266_open()
     switch (ret)
     {
     case -1:
-        printf("->> Error occurs when select() \n");
+        LOG_ERROR("esp8266", "select() error");
         break;
     case 0:
-        printf("->> Select() timeout \n");
+        LOG_WARN("esp8266", "select() timeout");
         break;
     default:
         if (FD_ISSET(fd, &fdset))
@@ -82,7 +79,7 @@ int esp8266_open()
                 {
                     /* 发送AT+RST指令重启ESP8266设备 */
                     if (write_port(fd, (uint8_t*)"AT+RST\r\n", 8) < 0) {
-                        printf("ERROR: write AT+RST failed\n");
+                        LOG_ERROR("esp8266", "write AT+RST failed");
                         close(fd);
                         return -1;
                     }
@@ -94,12 +91,12 @@ int esp8266_open()
                     if (p == NULL)
                     {
                         close(fd);
-                        printf("ERROR:ESP8266 RST Failed\n");
+                        LOG_ERROR("esp8266", "RST Failed");
                         return -1;
                     }
                     /* 持续读取数据，等待"jump"标志表示设备重启完成 */
                     {
-                        string acc;
+                        std::string acc;
                         fd_set rset;
                         struct timeval wt;
                         int jump_found = 0;
@@ -117,7 +114,7 @@ int esp8266_open()
                                 {
                                     buf[n] = '\0';
                                     acc += (char*)buf;
-                                    if (acc.find("jump") != string::npos)
+                                    if (acc.find("jump") != std::string::npos)
                                     {
                                         jump_found = 1;
                                     }
@@ -135,6 +132,7 @@ int esp8266_open()
                         if (jump_found)
                         {
                             tcflush(fd, TCIFLUSH);
+                            LOG_INFO("esp8266", "ESP8266 opened successfully");
                             return fd;
                         }
                     }
@@ -175,58 +173,59 @@ int esp8266_config(int fd)
 #endif
 
     if (set_opt1(fd, 115200, 8, 'n', 1) < 0) {
-        printf("ERROR: esp8266_config set_opt1 failed\n");
+        LOG_ERROR("esp8266", "config set_opt1 failed");
         close(fd);
         return -1;
     }
     if (write_port(fd, RST, strlen((const char*)RST)) < 0) {
-        printf("Warning: esp8266_config write RST failed\n");
+        LOG_WARN("esp8266", "config write RST failed");
     }
     sleep(DELAY_SEC);
     /* 设置AP模式 */
     if (write_port(fd, CWMODE, strlen((const char*)CWMODE)) < 0) {
-        printf("Warning: esp8266_config write CWMODE failed\n");
+        LOG_WARN("esp8266", "config write CWMODE failed");
     }
     sleep(DELAY_SEC);
     if (write_port(fd, RST, strlen((const char*)RST)) < 0) {
-        printf("Warning: esp8266_config write RST failed\n");
+        LOG_WARN("esp8266", "config write RST failed");
     }
     sleep(DELAY_SEC);
     /* 配置热点名称和密码 */
     if (write_port(fd, CWSAP, strlen((const char*)CWSAP)) < 0) {
-        printf("Warning: esp8266_config write CWSAP failed\n");
+        LOG_WARN("esp8266", "config write CWSAP failed");
     }
     sleep(DELAY_SEC);
     if (write_port(fd, RST, strlen((const char*)RST)) < 0) {
-        printf("Warning: esp8266_config write RST failed\n");
+        LOG_WARN("esp8266", "config write RST failed");
     }
     sleep(DELAY_SEC);
 #if USE_PROTOCOL == USE_UDP
     if (write_port(fd, CIPSTART, strlen((const char*)CIPSTART)) < 0) {
-        printf("Warning: esp8266_config write CIPSTART failed\n");
+        LOG_WARN("esp8266", "config write CIPSTART failed");
     }
     sleep(DELAY_SEC);
     if (write_port(fd, CIPMODE, strlen((const char*)CIPMODE)) < 0) {
-        printf("Warning: esp8266_config write CIPMODE failed\n");
+        LOG_WARN("esp8266", "config write CIPMODE failed");
     }
     sleep(DELAY_SEC);
     if (write_port(fd, CIPSEND, strlen((const char*)CIPSEND)) < 0) {
-        printf("Warning: esp8266_config write CIPSEND failed\n");
+        LOG_WARN("esp8266", "config write CIPSEND failed");
     }
     sleep(DELAY_SEC);
 #else
     /* 开启多连接模式 */
     if (write_port(fd, CIPMUX, strlen((const char*)CIPMUX)) < 0) {
-        printf("Warning: esp8266_config write CIPMUX failed\n");
+        LOG_WARN("esp8266", "config write CIPMUX failed");
     }
     sleep(DELAY_SEC);
     /* 开启TCP服务器，监听8080端口 */
     if (write_port(fd, CIPSERVER, strlen((const char*)CIPSERVER)) < 0) {
-        printf("Warning: esp8266_config write CIPSERVER failed\n");
+        LOG_WARN("esp8266", "config write CIPSERVER failed");
     }
     sleep(DELAY_SEC);
 #endif
     tcflush(fd, TCIOFLUSH);
+    LOG_INFO("esp8266", "ESP8266 configured as AP mode");
     return 0;
 }
 

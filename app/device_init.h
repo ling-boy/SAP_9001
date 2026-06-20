@@ -9,7 +9,7 @@
 
 #include <sys/socket.h>
 #include <string>
-using namespace std;
+#include <vector>
 
 /** @brief 网络配置常量 */
 #define WIFI_SERVER_IP   "192.168.3.1"

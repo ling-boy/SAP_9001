@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <termios.h>
 #include "hal/usbctl.h"
+#include "infra/logger.h"
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -36,7 +37,7 @@ int open_port(int comport)
         fd = open("/dev/tong_lora", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open lora fail!\n");
+            LOG_ERROR("usbctl", "Open lora fail!");
         }
     }
     else if (1 == comport)
@@ -44,7 +45,7 @@ int open_port(int comport)
         fd = open("/dev/tong_wifi", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open wifi fail!\n");
+            LOG_ERROR("usbctl", "Open wifi fail!");
         }
     }
     else if (2 == comport)
@@ -52,7 +53,7 @@ int open_port(int comport)
         fd = open("/dev/tong_bt", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open bt fail!\n");
+            LOG_ERROR("usbctl", "Open bt fail!");
         }
     }
     else if (3 == comport)
@@ -60,7 +61,7 @@ int open_port(int comport)
         fd = open("/dev/tong_4g", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open 4g fail!\n");
+            LOG_ERROR("usbctl", "Open 4g fail!");
         }
     }
     else if (4 == comport)
@@ -68,7 +69,7 @@ int open_port(int comport)
         fd = open("/dev/ttymxc2", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open ttymxc2 fail!\n");
+            LOG_ERROR("usbctl", "Open ttymxc2 fail!");
         }
     }
     else if (5 == comport)
@@ -76,7 +77,7 @@ int open_port(int comport)
         fd = open("/dev/ttymxc4", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open ttymxc4 fail!\n");
+            LOG_ERROR("usbctl", "Open ttymxc4 fail!");
         }
     }
     else if (6 == comport)
@@ -84,7 +85,7 @@ int open_port(int comport)
         fd = open("/dev/ttymxc1", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open ttymxc1 fail!\n");
+            LOG_ERROR("usbctl", "Open ttymxc1 fail!");
         }
     }
     else if (7 == comport)
@@ -92,18 +93,18 @@ int open_port(int comport)
         fd = open("/dev/ttymxc3", O_RDWR | O_NOCTTY | O_NDELAY);
         if (-1 == fd)
         {
-            printf("Open ttymxc3 fail!\n");
+            LOG_ERROR("usbctl", "Open ttymxc3 fail!");
         }
     }
     if (-1 == fd)
     {
-        perror("Can't Open Serial Port");
+        LOG_ERROR("usbctl", "Can't Open Serial Port: %s", strerror(errno));
         return (-1);
     }
 
     /* 恢复串口为阻塞模式 */
     if (fcntl(fd, F_SETFL, 0) < 0) {
-        printf("fcntl failed!\n");
+        LOG_ERROR("usbctl", "fcntl failed!");
         close(fd);
         return -1;
     }
@@ -124,8 +125,7 @@ int set_opt1(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop)
     struct termios newtio, oldtio;
     if (tcgetattr(fd, &oldtio) != 0)
     {
-        perror("SetupSerial 1");
-        printf("tcgetattr( fd,&oldtio) -> %d\n", -1);
+        LOG_ERROR("usbctl", "tcgetattr failed: %s", strerror(errno));
         return -1;
     }
     memset(&newtio, 0, sizeof(newtio));
@@ -201,7 +201,7 @@ int set_opt1(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop)
     tcflush(fd, TCIFLUSH);
     if ((tcsetattr(fd, TCSANOW, &newtio)) != 0)
     {
-        perror("com set error");
+        LOG_ERROR("usbctl", "com set error: %s", strerror(errno));
         return -1;
     }
     return 0;
@@ -222,8 +222,7 @@ int set_opt(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop, int flag)
     struct termios newtio, oldtio;
     if (tcgetattr(fd, &oldtio) != 0)
     {
-        perror("SetupSerial 1");
-        printf("tcgetattr( fd,&oldtio) -> %d\n", -1);
+        LOG_ERROR("usbctl", "tcgetattr failed: %s", strerror(errno));
         return -1;
     }
     memset(&newtio, 0, sizeof(newtio));
@@ -308,7 +307,7 @@ int set_opt(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop, int flag)
     tcflush(fd, TCIFLUSH);
     if ((tcsetattr(fd, TCSANOW, &newtio)) != 0)
     {
-        perror("com set error");
+        LOG_ERROR("usbctl", "com set error: %s", strerror(errno));
         return -1;
     }
     return 0;

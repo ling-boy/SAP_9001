@@ -13,7 +13,6 @@
  *          - GPS定位数据获取
  */
 #include <stdio.h>
-#include <iostream>
 #include <stdlib.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -37,17 +36,18 @@
 #include "app/message_transmitter.h"
 #include "sensor/sensor_driver.h"
 #include "infra/message_queue.h"
+#include "infra/logger.h"
+#include "infra/config.h"
 
 #define watchPathName "/home/root/myWatch.txt"
-using namespace std;
-extern const int softdogTimeout = 30;
+const int softdogTimeout = 30;
 
 /* 通信设备文件描述符 */
 int fd_lora = -1, fd_wifi = -1, fd_bt = -1, fd_lan = -1, fdL_lan = -1;
-vector<int>device_id;
-string id = "FF", net_id = "0000", mac = "", bt_mac = "", Isr_mac = "";
+std::vector<int>device_id;
+std::string id = "FF", net_id = "0000", mac = "", bt_mac = "", Isr_mac = "";
 int monitor_time = 4;
-string current_time = "";
+std::string current_time = "";
 char communicate_status[] = "0000";
 unsigned int hj_crc;
 
@@ -61,9 +61,9 @@ communicaManage* CM = new communicaManage;
 
 pthread_t tid_getSensor, tid_getLan, tid_transMessage, tid_gps, tid_ship_data, tid_softwd, tid_monitor485, tid_deviceRegist;
 int wdtNewSensorId = -1, wdtShipId = -1;
-MessageQueue<string> transMessage;
-queue<string>readMessage;
-string cpu_occupy = "";
+MessageQueue<std::string> transMessage;
+std::queue<std::string>readMessage;
+std::string cpu_occupy = "";
 
 int flag_wifi = 0;
 
@@ -103,7 +103,7 @@ static void signal_handler(int signum)
 /**
  * @brief 将PID写入看门狗文件
  */
-static void write_pid_file(const string& path, const string& value)
+static void write_pid_file(const std::string& path, const std::string& value)
 {
     int fd = open(path.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd >= 0) {
@@ -114,12 +114,10 @@ static void write_pid_file(const string& path, const string& value)
 
 int main()
 {
+    /* 初始化日志系统 */
+    sap::Logger::instance().setLevel(sap::LogLevel::DEBUG);
+    LOG_INFO("main", "SAP_9001 V2.1 starting...");
 
-    printf("朱柴林朱柴林朱柴林朱柴林朱柴林\n");
-    printf("朱柴林朱柴林朱柴林朱柴林朱柴林\n");
-    printf("朱柴林朱柴林朱柴林朱柴林朱柴林\n");
-    printf("朱柴林朱柴林朱柴林朱柴林朱柴林\n");
-    printf("朱柴林朱柴林朱柴林朱柴林朱柴林\n");
     /* 注册信号处理函数，确保被 kill 时能持久化数据 */
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -129,13 +127,13 @@ int main()
     sigaction(SIGINT, &sa, NULL);
 
     pid_t pt = getpid();
-    string ptstr = to_string(pt);
+    std::string ptstr = std::to_string(pt);
     g_fdWatch = open(watchPathName, O_WRONLY | O_TRUNC | O_CREAT, 0644);
-    if (g_fdWatch < 0) perror("main open:");
+    if (g_fdWatch < 0) LOG_ERROR("main", "open watch file failed: %s", strerror(errno));
     if (g_fdWatch >= 0) {
         int ret = write(g_fdWatch, ptstr.c_str(), ptstr.length());
         if (ret < 0) {
-            perror("错误：");
+            LOG_ERROR("main", "write PID failed: %s", strerror(errno));
         }
         /* 保持 g_fdWatch 打开，信号处理器会 lseek 到开头后写入 "0" */
     }
@@ -146,13 +144,13 @@ int main()
     CSoftwareWdt* g_CsoftwareWdt = &softwareWdt;
 
     if (pthread_create(&tid_gps, NULL, GET_GPS, NULL) != 0) {
-        perror("pthread_create tid_gps failed");
+        LOG_ERROR("main", "pthread_create tid_gps failed");
     }
     sleep(1);
 
     int ret = dev_init();
     if (-1 == ret) {
-        printf("Init communicate device error start reboot!\n");
+        LOG_FATAL("main", "Init communicate device error, start reboot!");
         /* 硬件清理：关闭LED、关闭12V电源、同步RTC */
         system("echo 0 > /sys/class/leds/red/brightness");
         system("echo 0 > /sys/class/leds/yellow/brightness");
@@ -163,48 +161,46 @@ int main()
         sleep(1);
         system("killall udhcpc");
         write_pid_file(watchPathName, "0");
-        cout << "进程退出" << endl;
-        /* g_CsoftwareWdt is now a stack object, no delete needed */
+        LOG_INFO("main", "Process exiting");
         return 0;
     }
 
-    cout << "Init communicate device success" << endl;
+    LOG_INFO("main", "Init communicate device success");
     sleep(1);
     get_mac();
     cpu_occupy = get_cpuOccupy();
-    cout << "CPU Usage Rate：" << cpu_occupy << endl;
-    vector<vector<int>> vec;
+    LOG_INFO("main", "CPU Usage Rate: %s", cpu_occupy.c_str());
+    std::vector<std::vector<int>> vec;
     vec = CM->getALLIfd();
     deviceRegist registObj(g_CsoftwareWdt, &vec);
     if (pthread_create(&tid_deviceRegist, NULL, device_regist, &registObj) != 0) {
-        perror("pthread_create tid_deviceRegist failed");
+        LOG_ERROR("main", "pthread_create tid_deviceRegist failed");
         tid_deviceRegist = 0;
     }
     if (pthread_create(&tid_softwd, NULL, softwarewd, g_CsoftwareWdt) != 0) {
-        perror("pthread_create tid_softwd failed");
+        LOG_ERROR("main", "pthread_create tid_softwd failed");
         tid_softwd = 0;
     }
     void* regRet;
     if (tid_deviceRegist != 0 && pthread_join(tid_deviceRegist, &regRet) == 0)
     {
         if (regRet == (void*)-1) {
-            cout << "未注册成功" << endl;
+            LOG_ERROR("main", "Device registration failed");
             sleep(30);
             write_pid_file(watchPathName, "0");
-            /* g_CsoftwareWdt is now a stack object, no delete needed */
             return 0;
         }
     }
-    cout << "<<<<<<<<<<<<<<<<<<<<<Device Registration Successful<<<<<<<<<<<<<<<<<<<<<<<<<" << endl;
+    LOG_INFO("main", "Device Registration Successful");
     int numRead = readFromFile(readMessage);
-    cout << "读取到未发送的数据包数：" << numRead << endl;
+    LOG_INFO("main", "Read unsent packets: %d", numRead);
     sleep(1);
     if (pthread_create(&tid_ship_data, NULL, get_ship_data, g_CsoftwareWdt) != 0) {
-        perror("pthread_create tid_ship_data failed");
+        LOG_ERROR("main", "pthread_create tid_ship_data failed");
         tid_ship_data = 0;
     }
     if (pthread_create(&tid_transMessage, NULL, send_mess, g_CsoftwareWdt) != 0) {
-        perror("pthread_create tid_transMessage failed");
+        LOG_ERROR("main", "pthread_create tid_transMessage failed");
         tid_transMessage = 0;
     }
 
@@ -214,7 +210,7 @@ int main()
     }
 
     /* 主线程等待信号，信号处理函数负责持久化数据和清理 */
-    cout << "主线程等待信号退出..." << endl;
+    LOG_INFO("main", "Main thread waiting for signal...");
     pause();
 
     /* 不会到达此处，信号处理函数中调用 _exit(0) */

@@ -13,12 +13,10 @@
 #include <fcntl.h>
 #include <sys/select.h>
 #include <string>
-#include <iostream>
 #include <vector>
 #include <sys/time.h>
 #include "infra/software_wdt.h"
 #include "infra/communica_manage.h"
-using namespace std;
 
 /** 最大协议包字节数 */
 #define RX_SIZE                 58
@@ -67,7 +65,7 @@ using namespace std;
 /** 时间戳下发 */
 #define TIME_SEND               "20"
 
-extern string  id, net_id, mac, cpu_occupy, Isr_mac, current_time;
+extern std::string  id, net_id, mac, cpu_occupy, Isr_mac, current_time;
 extern char communicate_status[];
 extern int monitor_time;
 extern communicaManage* CM;
@@ -78,8 +76,8 @@ extern communicaManage* CM;
 struct deviceRegist
 {
 	CSoftwareWdt *g_CsoftwareWdt;           /**< 软件看门狗对象 */
-	vector<vector<int>> *vec;                /**< 初始化成功的通信设备列表 */
-	deviceRegist(CSoftwareWdt *g_CsoftwareWdt,vector<vector<int>> *vec) :g_CsoftwareWdt(g_CsoftwareWdt), vec(vec) {};
+	std::vector<std::vector<int>> *vec;      /**< 初始化成功的通信设备列表 */
+	deviceRegist(CSoftwareWdt *g_CsoftwareWdt, std::vector<std::vector<int>> *vec) :g_CsoftwareWdt(g_CsoftwareWdt), vec(vec) {};
 };
 
 /**
