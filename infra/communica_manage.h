@@ -21,14 +21,16 @@
 
 /**
  * @brief 通信设备信息结构体
+ * @details 使用 std::function 替代 C 风格函数指针，支持 lambda 和仿函数
  */
 struct communicate {
     int fd;                  /**< 通信设备文件描述符 */
     /**
      * @brief 回调函数数组（3个槽位）
      * @details 0: 初始化回调  1: 发送操作回调  2: 用户自定义操作回调
+     *          使用 std::function 支持 lambda、仿函数和普通函数
      */
-    int (*reback[3])(int fd);
+    std::function<int(int)> reback[3];
     int timecount;           /**< 生存计数器 */
     int timeout;             /**< 超时阈值，超过则判定连接中断并触发重初始化 */
 };
@@ -98,10 +100,10 @@ public:
      * @brief 注册通信设备的回调函数
      * @param id       设备ID
      * @param pos      回调槽位（0=初始化, 1=发送, 2=自定义）
-     * @param function 回调函数指针
+     * @param function 回调函数（支持 lambda、仿函数、普通函数）
      * @return 成功返回true，失败返回false
      */
-    bool callbackRgist(int id, int pos, int(*function)(int));
+    bool callbackRgist(int id, int pos, std::function<int(int)> function);
 
     /**
      * @brief 获取单个设备的文件描述符

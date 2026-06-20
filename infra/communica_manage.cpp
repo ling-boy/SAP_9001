@@ -218,13 +218,13 @@ bool communicaManage::reinit(int id, int para)
     else
     {
         int fd = temp->com->reback[0](para);
-        int(*func)(int para) = temp->com->reback[0];
+        auto func = temp->com->reback[0];  // 保存回调函数
         deletecommunicateNode(id);
         if (!addCommunicateNode(id, fd)) {
             LOG_ERROR("comm_mgr", "%s", "Reinit failed: add node failed");
             return false;
         }
-        callbackRgist(id, 0, func);
+        callbackRgist(id, 0, std::move(func));
         LOG_INFO("comm_mgr", "Reinit device ID=%d success", id);
         return true;
     }
@@ -233,7 +233,7 @@ bool communicaManage::reinit(int id, int para)
 /**
  * @brief 注册通信设备的回调函数
  */
-bool communicaManage::callbackRgist(int id, int pos, int(*function)(int))
+bool communicaManage::callbackRgist(int id, int pos, std::function<int(int)> function)
 {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
     if (pos < 0 || pos > 2) return false;
@@ -245,7 +245,7 @@ bool communicaManage::callbackRgist(int id, int pos, int(*function)(int))
     }
     else
     {
-        temp->com->reback[pos] = function;
+        temp->com->reback[pos] = std::move(function);
         LOG_INFO("comm_mgr", "Callback registered for device ID=%d pos=%d", id, pos);
         return true;
     }
