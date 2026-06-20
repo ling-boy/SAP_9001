@@ -146,20 +146,37 @@ public:
         else if (num == 2) len_str = "00" + len_str;
         else if (num == 3) len_str = "0" + len_str;
 
-        // 组装协议包（使用 2048 字节栈缓冲区，避免堆分配）
-        char packet[2048] = {0};
-        int needed = snprintf(packet, sizeof(packet),
+        // 从内存池分配缓冲区（O(1) 操作，避免堆碎片）
+        auto* buf = ctx.packetPool().allocate();
+        if (buf == nullptr) {
+            LOG_ERROR("hj212", "%s", "Packet pool exhausted");
+            return "";
+        }
+        char* packet = buf->data;
+
+        // 组装协议包
+        int needed = snprintf(packet, 2048,
             "$06%s%s%s00%s%s%s%s%s%s%s%s@",
             communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
             len_str.c_str(), isr_mac_.c_str(), mac_.c_str(),
             port_info_.c_str(), gps_.c_str(), cpu_mem_.c_str(),
             comm_status_.c_str(), data_.c_str());
 
-        if (needed < 0) return "";
-        if (needed >= (int)sizeof(packet)) {
+        if (needed < 0) {
+            ctx.packetPool().deallocate(buf);
+            return "";
+        }
+        if (needed >= 2048) {
             LOG_ERROR("hj212", "Packet too large (%d bytes), truncating", needed);
         }
-        return std::string(packet);
+
+        // 复制到 string
+        std::string result(packet);
+
+        // 归还缓冲区到内存池
+        ctx.packetPool().deallocate(buf);
+
+        return result;
     }
 
 private:

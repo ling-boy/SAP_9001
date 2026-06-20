@@ -22,6 +22,7 @@
 #include "infra/communica_manage.h"
 #include "infra/message_queue.h"
 #include "infra/software_wdt.h"
+#include "infra/memory_pool.h"
 
 namespace sap {
 
@@ -130,6 +131,19 @@ public:
     communicaManage& commManager() { return comm_mgr_; }
     CSoftwareWdt& softwareWdt() { return wdt_; }
 
+    /**
+     * @brief 06包缓冲区结构体
+     */
+    struct PacketBuffer {
+        char data[2048];
+    };
+
+    /**
+     * @brief 获取06包内存池
+     * @details 预分配 8 个 2048 字节缓冲区，用于06包构建
+     */
+    MemoryPool<PacketBuffer, 8>& packetPool() { return packet_pool_; }
+
     // ======================================================================
     // 便捷方法
     // ======================================================================
@@ -203,6 +217,7 @@ private:
     ThreadIds threads_;
     communicaManage comm_mgr_;
     CSoftwareWdt wdt_;
+    MemoryPool<PacketBuffer, 8> packet_pool_;  // 06包内存池（8个缓冲区）
 };
 
 } // namespace sap
