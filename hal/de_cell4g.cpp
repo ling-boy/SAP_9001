@@ -21,7 +21,7 @@
  * @return 0  成功获取到IP地址
  * @return -1 5次重试后仍未成功连接
  */
-int hard4g_init(char *net_name)
+int hard4g_init(const char *net_name)
 {
         int retry_count = 5;
         int success = 1;
@@ -63,7 +63,7 @@ int hard4g_init(char *net_name)
  * @return  0 成功获取到有效IP地址
  * @return -1 获取IP失败（设备不存在或IP无效）
  */
-int cell4g_detect(char *net_name)
+int cell4g_detect(const char *net_name)
 {
         /* 校验 net_name 白名单：只允许字母、数字和点 */
         for (int i = 0; net_name[i] != '\0'; i++) {

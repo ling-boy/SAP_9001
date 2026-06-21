@@ -187,7 +187,6 @@ int esp8266_config(int fd)
 
     if (set_opt1(fd, 115200, 8, 'n', 1) < 0) {
         LOG_ERROR("esp8266", "config set_opt1 failed");
-        close(fd);
         return -1;
     }
     if (write_port(fd, RST, strlen((const char*)RST)) < 0) {

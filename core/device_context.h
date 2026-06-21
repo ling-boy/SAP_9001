@@ -112,6 +112,7 @@ public:
     // 线程 ID
     // ======================================================================
     struct ThreadIds {
+        pthread_t main = 0;          ///< 主线程 ID，供看门狗超时时发送信号
         pthread_t gps = 0;
         pthread_t device_regist = 0;
         pthread_t watchdog = 0;

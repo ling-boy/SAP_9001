@@ -159,7 +159,13 @@ void* softwarewd(void* arg)
 	for(;;)
 	{
 		if(g_CsoftwareWdt->MontiorWdtRunState() == -1) {
-			LOG_FATAL("wdt", "%s", "Thread timeout detected, watchdog exiting");
+			LOG_FATAL("wdt", "%s", "Thread timeout detected, sending SIGUSR1 to main thread");
+			// 向主线程发送信号，触发优雅退出
+			auto& ctx = sap::DeviceContext::instance();
+			pthread_t main_tid = ctx.threads().main;
+			if (main_tid != 0) {
+				pthread_kill(main_tid, SIGUSR1);
+			}
 			return NULL;
 		}
 		sleep(4);

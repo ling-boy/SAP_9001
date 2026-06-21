@@ -78,6 +78,28 @@ static void signal_handler(int signum)
 }
 
 /**
+ * @brief 看门狗超时信号处理函数
+ * @details 处理 SIGUSR1，当看门狗检测到线程超时时触发
+ *          执行与 signal_handler 相同的清理逻辑后退出
+ */
+static void watchdog_signal_handler(int signum)
+{
+    (void)signum;
+    /* 持久化未发送的数据 */
+    if (g_pTransMessage)
+        drainAndPersistUnsafe(*g_pTransMessage);
+    /* 写入PID=0通知看门狗脚本 */
+    if (g_fdWatch >= 0) {
+        lseek(g_fdWatch, 0, SEEK_SET);
+        const char* zero = "0";
+        write(g_fdWatch, zero, 1);
+        ftruncate(g_fdWatch, 1);
+        close(g_fdWatch);
+    }
+    _exit(0);
+}
+
+/**
  * @brief 将PID写入看门狗文件
  */
 static void write_pid_file(const std::string& path, const std::string& value)
@@ -106,6 +128,9 @@ int main()
     auto& ctx = sap::DeviceContext::instance();
     g_pTransMessage = &ctx.queues().transmit;
 
+    /* 保存主线程 ID 到 DeviceContext，供看门狗超时时发送信号 */
+    ctx.threads().main = pthread_self();
+
     /* 注册信号处理函数，确保被 kill 时能持久化数据 */
     struct sigaction sa;
     sa.sa_handler = signal_handler;
@@ -113,6 +138,13 @@ int main()
     sa.sa_flags = 0;
     sigaction(SIGTERM, &sa, NULL);
     sigaction(SIGINT, &sa, NULL);
+
+    /* 注册看门狗超时信号处理函数 */
+    struct sigaction sa_wdt;
+    sa_wdt.sa_handler = watchdog_signal_handler;
+    sigemptyset(&sa_wdt.sa_mask);
+    sa_wdt.sa_flags = 0;
+    sigaction(SIGUSR1, &sa_wdt, NULL);
 
     pid_t pt = getpid();
     std::string ptstr = std::to_string(pt);

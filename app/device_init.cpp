@@ -39,10 +39,12 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
 
     if ((flags = fcntl(sockfd, F_GETFL, 0)) == -1) {
         LOG_ERROR("dev_init", "fcntl F_GETFL: %s", strerror(errno));
+        close(sockfd);
         return -1;
     }
     if (fcntl(sockfd, F_SETFL, flags | O_NONBLOCK) == -1) {
         LOG_ERROR("dev_init", "fcntl F_SETFL: %s", strerror(errno));
+        close(sockfd);
         return -1;
     }
 
@@ -50,6 +52,7 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
     if ((n = connect(sockfd, saptr, salen)) < 0) {
         if (errno != EINPROGRESS) {
             fcntl(sockfd, F_SETFL, flags);
+            close(sockfd);
             return -1;
         }
     }
@@ -66,11 +69,13 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
     if ((n = select(sockfd + 1, &rset, &wset, NULL, nsec ? &tval : NULL)) == 0) {
         errno = ETIMEDOUT;
         fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
+        close(sockfd);
         return -1;
     }
     else if (n == -1) {
         LOG_ERROR("dev_init", "select: %s", strerror(errno));
         fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
+        close(sockfd);
         return -1;
     }
 
@@ -78,12 +83,14 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
         len = sizeof(error);
         if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
             fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
+            close(sockfd);
             return -1;
         }
     }
     else {
         LOG_ERROR("dev_init", "%s", "select error: socket not set");
         fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
+        close(sockfd);
         return -1;
     }
 
@@ -94,6 +101,7 @@ done:
 
     if (error) {
         errno = error;
+        close(sockfd);
         return -1;
     }
 
@@ -159,7 +167,6 @@ int wifi_reinit(int old_fd)
         if (wifi_fd_connect < 0)
         {
             LOG_ERROR("dev_init", "wifi: connect: %s", strerror(errno));
-            close(fd_wifi_sock);
             ctx.fds().wifi = -1;
             system("killall wpa_supplicant");
             system("killall udhcpc");
@@ -224,7 +231,6 @@ int lan_reinit(int old_fd)
         if (lan_fd_connect < 0)
         {
             LOG_ERROR("dev_init", "lan: connect: %s", strerror(errno));
-            close(ctx.fds().lan);
             return -1;
         }
         else
@@ -263,6 +269,7 @@ int dev_init()
                 case 2: ctx.commManager().callbackRgist(id, 0, wifi_reinit); break;
                 case 3: ctx.commManager().callbackRgist(id, 0, bt_reinit); break;
                 case 4: ctx.commManager().callbackRgist(id, 0, lan_reinit); break;
+                case 5: break;  // LAN Server 不需要 reinit
             }
             ctx.fds().device_id.push_back(fd);
         }

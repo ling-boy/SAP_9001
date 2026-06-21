@@ -26,7 +26,7 @@
  * @param net_name 网络接口名称，例如 "ppp0"
  * @return 成功返回0，失败返回-1
  */
-int cell4g_detect(char* net_name);
+int cell4g_detect(const char* net_name);
 
 /**
  * @brief 通过TCP连接测试指定的服务器IP和端口是否可达
@@ -47,6 +47,6 @@ int cell4g_open(void);
  * @param net_name 网络接口名称，例如 "ppp0"
  * @return 成功返回0，失败返回-1
  */
-int hard4g_init(char* net_name);
+int hard4g_init(const char* net_name);
 
 #endif
