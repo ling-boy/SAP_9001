@@ -123,10 +123,14 @@ std::string cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n)
 
 /**
  * @brief 获取CPU和内存使用率的组合字符串
+ * @details 线程安全版本，使用互斥锁保护静态变量
  */
 std::string get_cpuOccupy(){
     static std::string cached_result;
     static time_t last_sample_time = 0;
+    static std::mutex cpu_mtx;
+
+    std::lock_guard<std::mutex> lock(cpu_mtx);
     time_t now = time(NULL);
 
     /* 30秒缓存：避免频繁采样阻塞100ms */
@@ -149,8 +153,8 @@ std::string get_cpuOccupy(){
     usleep(100000);
     if (get_cpuoccupy((CPU_OCCUPY *)&cpu_stat2) < 0)
         return "0101";
-    cpu =cal_cpuoccupy(&cpu_stat1, &cpu_stat2);
-    cpu_mem=cpu+mem;
+    cpu = cal_cpuoccupy(&cpu_stat1, &cpu_stat2);
+    cpu_mem = cpu + mem;
 
     cached_result = cpu_mem;
     last_sample_time = now;

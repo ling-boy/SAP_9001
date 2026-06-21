@@ -2,6 +2,7 @@
  * @file usart.h
  * @brief 串口监听模块接口
  * @details 提供RS485和RS232串口数据监听功能，使用select多路复用
+ *          注意：RS485_Monitor 功能尚未集成，保留接口定义供后续使用
  */
 #pragma once
 #ifndef _USART_H_
@@ -32,11 +33,13 @@
  * @brief 监听RS485和RS232串口数据，收到数据后封装为06包推送到队列
  * @param arg monitor485结构体指针
  * @return NULL
+ * @note 此功能尚未集成到主程序，保留接口定义供后续使用
  */
 void* RS485_Monitor(void *arg);
 
 /**
  * @brief RS485监听线程参数结构体
+ * @note 此功能尚未集成到主程序，保留结构体定义供后续使用
  */
 struct monitor485
 {

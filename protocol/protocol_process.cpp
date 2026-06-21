@@ -241,8 +241,9 @@ std::string buildHeartbeat()
 
     // 构建数据段：CPU使用率(2位) + 内存空闲率(2位) + 通信状态(4位) + 队列深度(4位)
     char data_segment[16];
+    std::string comm_status = ctx.getCommunicateStatus();
     snprintf(data_segment, sizeof(data_segment), "%s%s%04d",
-             cpu_mem.c_str(), ctx.identity().communicate_status, queue_depth);
+             cpu_mem.c_str(), comm_status.c_str(), queue_depth);
 
     // 计算长度：数据段长度 + 固定字段长度(设备ID + 网络ID + 通信类型 = 2+4+1 = 7)
     int length = strlen(data_segment) + 7;

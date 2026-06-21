@@ -156,8 +156,8 @@ public:
 
         // 组装协议包
         int needed = snprintf(packet, 2048,
-            "$06%s%s%s00%s%s%s%s%s%s%s%s@",
-            communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
+            "$%s%s%s%s00%s%s%s%s%s%s%s%s@",
+            command_.c_str(), communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
             len_str.c_str(), isr_mac_.c_str(), mac_.c_str(),
             port_info_.c_str(), gps_.c_str(), cpu_mem_.c_str(),
             comm_status_.c_str(), data_.c_str());

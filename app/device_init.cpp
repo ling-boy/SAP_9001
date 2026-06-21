@@ -114,7 +114,7 @@ int lora_reinit(int old_fd)
     close(old_fd);
     ctx.fds().lora = new_fd;
     {
-        ctx.identity().communicate_status[0] = '1';
+        ctx.setCommunicateStatus(0, '1');
         LOG_INFO("dev_init", "%s", "lora reinit success");
         return ctx.fds().lora;
     }
@@ -170,7 +170,7 @@ int wifi_reinit(int old_fd)
             LOG_INFO("dev_init", "%s", "wifi: connect server success");
             LOG_INFO("dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
             ctx.fds().wifi = fd_wifi_sock;
-            ctx.identity().communicate_status[1] = '1';
+            ctx.setCommunicateStatus(1, '1');
             system("echo 1 > /sys/class/leds/yellow/brightness");
             return fd_wifi_sock;
         }
@@ -191,7 +191,7 @@ int bt_reinit(int old_fd)
     else
     {
         LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
-        ctx.identity().communicate_status[2] = '1';  // BT id=3, index=2
+        ctx.setCommunicateStatus(2, '1');  // BT id=3, index=2
         system("echo 1 > /sys/class/leds/green/brightness");
         return ctx.fds().bt;
     }
@@ -232,7 +232,7 @@ int lan_reinit(int old_fd)
             int lan_fd = ctx.fds().lan;
             LOG_INFO("dev_init", "%s", "lanship: connect server success");
             LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", lan_fd);
-            ctx.identity().communicate_status[3] = '1';  // LAN id=4, index=3
+            ctx.setCommunicateStatus(3, '1');  // LAN id=4, index=3
             return lan_fd;
         }
     }
@@ -278,8 +278,8 @@ int dev_init()
 
         // communicate_status 索引：LoRa=0, WiFi=1, BT=2, LAN=3
         int status_idx = id - 1;
-        if (status_idx >= 0 && status_idx < (int)sizeof(ctx.identity().communicate_status) - 1) {
-            ctx.identity().communicate_status[status_idx] = '1';
+        if (status_idx >= 0 && status_idx <= 5) {
+            ctx.setCommunicateStatus(status_idx, '1');
         }
 
         LOG_INFO("dev_init", "Init success: %s, fd=%d", strategy->typeName().c_str(), fd);

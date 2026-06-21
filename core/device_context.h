@@ -216,6 +216,27 @@ public:
     void setIdentityCpuOccupy(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.cpu_occupy = val; }
 
     /**
+     * @brief 线程安全地设置 communicate_status
+     * @param index 数组索引（0-5）
+     * @param val   字符值（'0' 或 '1'）
+     */
+    void setCommunicateStatus(int index, char val) {
+        if (index >= 0 && index < 6) {
+            std::lock_guard<std::mutex> lock(identity_mtx_);
+            identity_.communicate_status[index] = val;
+        }
+    }
+
+    /**
+     * @brief 线程安全地获取 communicate_status
+     * @return 状态字符串的副本
+     */
+    std::string getCommunicateStatus() const {
+        std::lock_guard<std::mutex> lock(identity_mtx_);
+        return std::string(identity_.communicate_status);
+    }
+
+    /**
      * @brief 线程安全地获取设备标识
      */
     std::string getIdentityId() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.id; }
