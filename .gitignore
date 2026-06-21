@@ -1,6 +1,7 @@
 # Build output
 build/
 build-release/
+build-check/
 cmake-build-*/
 
 # IDE
