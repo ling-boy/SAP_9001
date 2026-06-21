@@ -71,6 +71,8 @@ public:
 
 /**
  * @brief LAN 服务器端策略（接收其他节点数据）
+ * @note 当前实现仅创建监听 socket，accept() 逻辑尚未实现
+ *       预留接口供后续扩展：接收其他监测节点的数据
  */
 class LanServerStrategy : public CommunicationStrategyBase {
 public:

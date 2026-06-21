@@ -115,10 +115,14 @@ void* send_mess(void* arg)
                 if (ret == 0) {
                     LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<ISR Quit<<<<<<<<<<<<<<");
                     LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<SAP Will reConnect<<<<<<<<<<<<<<");
-                    // 触发重连而不是退出线程
+                    // 触发重连，使用指数退避避免熔断后空转
                     int activeId = ctx.commManager().getSuccessId();
                     if (activeId >= 0) {
-                        ctx.commManager().reinit(activeId, 0);
+                        if (!ctx.commManager().reinit(activeId, 0)) {
+                            // 熔断器打开，等待冷却时间后再重试
+                            LOG_WARN("transmit", "%s", "Circuit breaker open, waiting 30s before retry");
+                            sleep(30);
+                        }
                     }
                     sleep(2);
                     continue;
@@ -163,8 +167,13 @@ void* send_mess(void* arg)
                                         g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                                         LOG_INFO("transmit", "Sent offline cache packet success");
                                     }
-                                    g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
-                                    g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
+                                    // 只在传感器线程启动后才喂狗（ID >= 0）
+                                    if (ctx.watchdog().gas_wdt_id >= 0) {
+                                        g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
+                                    }
+                                    if (ctx.watchdog().ship_wdt_id >= 0) {
+                                        g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
+                                    }
                                 }
                                 // 将发送失败的数据统一放回队列
                                 if (!failed_packets.empty()) {

@@ -20,7 +20,7 @@ static void hardware_cleanup()
     system("echo 0 > /sys/class/leds/red/brightness");
     system("echo 0 > /sys/class/leds/yellow/brightness");
     system("echo 0 > /sys/class/leds/green/brightness");
-    std::string power_off = CFG_STR("paths", "power_12v_script", "/home/root/power_12v.sh") + " off";
+    std::string power_off = CFG_STR("paths", "power_script", "./power_12v.sh") + " off";
     system(power_off.c_str());
     system("hwclock -w");
     system("killall wpa_supplicant");
@@ -210,6 +210,7 @@ void* device_regist(void* arg)
                     }
                     std::string recv_protocal = regist_recv_message.substr(1, 2);
                     // 收到17协议，提取ISR的MAC地址、设备ID和网络ID
+                    // 注意：此处假设17协议格式为固定偏移，需与ISR端协议文档对照确认
                     if (recv_protocal == REQ_SEND_INFO) {
                         std::string recv_mac = regist_recv_message.substr(16, 16);
                         if (recv_mac == ctx.getIdentityMac()) {

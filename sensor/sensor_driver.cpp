@@ -9,6 +9,7 @@
 #include "hal/gps.h"
 #include "infra/message_queue.h"
 #include "infra/logger.h"
+#include "infra/config.h"
 #include "core/device_context.h"
 #include <stdio.h>
 #include <string.h>
@@ -371,7 +372,9 @@ static std::vector<SensorConfig> getGasSensorConfigs()
 class GasSensorDriver : public SensorDriver {
 public:
     GasSensorDriver(CSoftwareWdt* wdt, int wdt_id)
-        : SensorDriver(wdt, wdt_id, "010", "/dev/ttymxc2", 9600) {}
+        : SensorDriver(wdt, wdt_id, "010",
+                        CFG_STR("sensor.gas", "port", "/dev/ttymxc2"),
+                        CFG_INT("sensor.gas", "baudrate", 9600)) {}
 
     std::vector<SensorConfig> getSensorConfigs() override {
         return getGasSensorConfigs();

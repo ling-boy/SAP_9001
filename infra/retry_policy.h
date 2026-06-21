@@ -40,14 +40,15 @@ public:
      */
     int nextDelay() {
         // 计算指数退避：base * 2^count
-        // 限制 retry_count_ 上限避免整数溢出（1 << 31 是 UB）
-        int shift = std::min(retry_count_, 30);
-        int delay = base_ms_ * (1 << shift);
+        // 限制 retry_count_ 上限避免整数溢出
+        int shift = std::min(retry_count_, 20);  // 限制为20，避免 1<<21 超出 int 范围
+        // 使用 int64_t 防止乘法溢出
+        int64_t delay = static_cast<int64_t>(base_ms_) * (1LL << shift);
         // 限制最大延迟
-        delay = std::min(delay, max_ms_);
+        delay = std::min(delay, static_cast<int64_t>(max_ms_));
         // 增加重试计数
         retry_count_++;
-        return delay;
+        return static_cast<int>(delay);
     }
 
     /**
