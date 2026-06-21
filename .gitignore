@@ -20,3 +20,7 @@ cmake-build-*/
 # Cache
 .cache/
 compile_commands.json
+
+# md
+log.md
+log sap.md
