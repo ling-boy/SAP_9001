@@ -190,8 +190,8 @@ int main()
     LOG_INFO("main", "Init communicate device success");
     sleep(1);
     get_mac();
-    ctx.identity().cpu_occupy = get_cpuOccupy();
-    LOG_INFO("main", "CPU Usage Rate: %s", ctx.identity().cpu_occupy.c_str());
+    ctx.setIdentityCpuOccupy(get_cpuOccupy());
+    LOG_INFO("main", "CPU Usage Rate: %s", ctx.getIdentityCpuOccupy().c_str());
     std::vector<std::vector<int>> vec;
     vec = ctx.commManager().getALLIfd();
     deviceRegist* registObj = new deviceRegist(&ctx.softwareWdt(), &vec);

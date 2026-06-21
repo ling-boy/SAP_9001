@@ -138,8 +138,7 @@ int CSoftwareWdt::MontiorWdtRunState()
 	/* 第二阶段：锁外执行 pthread_cancel + pthread_join，避免死锁 */
 	if (timeout_detected) {
 		auto& threads = sap::DeviceContext::instance().threads();
-		cancelAndJoin(threads.get_sensor, "getSensor");
-		cancelAndJoin(threads.get_lan, "getLan");
+		cancelAndJoin(threads.ship_data, "ship_data");
 		cancelAndJoin(threads.gps, "gps");
 		if (trans_alive) {
 			cancelAndJoin(threads.trans_message, "transMessage");

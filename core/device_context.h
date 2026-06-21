@@ -18,6 +18,8 @@
 #include <vector>
 #include <queue>
 #include <cstring>
+#include <atomic>
+#include <mutex>
 #include <pthread.h>
 #include "infra/communica_manage.h"
 #include "infra/message_queue.h"
@@ -75,7 +77,7 @@ public:
         int lan = -1;
         int lan_server = -1;
         int flag_wifi = 0;
-        bool gps_failed = false;                 // GPS 初始化失败标志
+        std::atomic<bool> gps_failed{false};     // GPS 初始化失败标志（原子变量，线程安全）
         std::vector<int> device_id;              // 已初始化成功的通信设备ID列表
     };
 
@@ -95,7 +97,7 @@ public:
     struct MessageQueues {
         MessageQueue<std::string> transmit;      // 实时发送队列
         std::queue<std::string> offline_cache;   // 离线缓存队列
-        pthread_mutex_t offline_mtx = PTHREAD_MUTEX_INITIALIZER;  // 离线缓存互斥锁
+        std::mutex offline_mtx;  // 离线缓存互斥锁
         unsigned int hj_crc = 0;                 // HJ212 CRC 校验值
     };
 
@@ -254,6 +256,7 @@ public:
     std::string getIdentityId() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.id; }
     std::string getIdentityNetId() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.net_id; }
     std::string getIdentityMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.mac; }
+    std::string getIdentityBtMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.bt_mac; }
     std::string getIdentityIsrMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.isr_mac; }
     std::string getIdentityCurrentTime() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.current_time; }
     std::string getIdentityCpuOccupy() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.cpu_occupy; }

@@ -188,7 +188,8 @@ int bt_reinit(int old_fd)
 {
     auto& ctx = sap::DeviceContext::instance();
     close(old_fd);
-    ctx.fds().bt = bluetooth_open(ctx.identity().bt_mac);
+    std::string bt_mac = ctx.getIdentityBtMac();
+    ctx.fds().bt = bluetooth_open(bt_mac);
     if (-1 == ctx.fds().bt)
     {
         ctx.setIdentityBtMac("");

@@ -147,12 +147,13 @@ void* send_mess(void* arg)
                             // 先取后发模式：在锁内取出所有数据，解锁后逐个发送
                             std::vector<std::string> pending_packets;
                             std::vector<std::string> failed_packets;
-                            pthread_mutex_lock(&ctx.queues().offline_mtx);
-                            while (!ctx.queues().offline_cache.empty()) {
-                                pending_packets.push_back(ctx.queues().offline_cache.front());
-                                ctx.queues().offline_cache.pop();
+                            {
+                                std::lock_guard<std::mutex> lk(ctx.queues().offline_mtx);
+                                while (!ctx.queues().offline_cache.empty()) {
+                                    pending_packets.push_back(ctx.queues().offline_cache.front());
+                                    ctx.queues().offline_cache.pop();
+                                }
                             }
-                            pthread_mutex_unlock(&ctx.queues().offline_mtx);
 
                             if (!pending_packets.empty()) {
                                 flag = false;
@@ -177,11 +178,10 @@ void* send_mess(void* arg)
                                 }
                                 // 将发送失败的数据统一放回队列
                                 if (!failed_packets.empty()) {
-                                    pthread_mutex_lock(&ctx.queues().offline_mtx);
+                                    std::lock_guard<std::mutex> lk(ctx.queues().offline_mtx);
                                     for (auto& str : failed_packets) {
                                         ctx.queues().offline_cache.push(str);
                                     }
-                                    pthread_mutex_unlock(&ctx.queues().offline_mtx);
                                 }
                             }
                             if (flag == false) {

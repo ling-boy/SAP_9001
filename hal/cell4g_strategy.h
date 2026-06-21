@@ -43,7 +43,7 @@ public:
     }
 
     int reinitialize(int old_fd) override {
-        close(old_fd);
+        (void)old_fd;  // caller is responsible for closing old_fd
         fd_ = -1;
         return initialize();
     }
