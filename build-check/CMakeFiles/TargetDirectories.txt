@@ -1,0 +1,3 @@
+/home/zcl/ship/SAP_9001_V2.1/build-check/CMakeFiles/modbus_9001.dir
+/home/zcl/ship/SAP_9001_V2.1/build-check/CMakeFiles/edit_cache.dir
+/home/zcl/ship/SAP_9001_V2.1/build-check/CMakeFiles/rebuild_cache.dir

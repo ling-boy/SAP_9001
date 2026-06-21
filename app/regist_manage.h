@@ -19,8 +19,7 @@
 #include "infra/communica_manage.h"
 #include "protocol/constants.h"
 
-/** 最大协议包字节数 */
-#define RX_SIZE                 58
+/* RX_SIZE 已在 protocol/constants.h 中定义，此处不再重复 */
 
 /* 所有全局状态已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance() 访问 */
 

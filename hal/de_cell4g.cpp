@@ -75,7 +75,7 @@ int cell4g_detect(const char *net_name)
                 }
         }
         /* 添加默认路由，确保流量通过指定网络接口出口 */
-        char route_cmd[128];
+        char route_cmd[256];
         snprintf(route_cmd, sizeof(route_cmd), "route add -net 0.0.0.0 netmask 0.0.0.0 dev %s", net_name);
         system(route_cmd);
 

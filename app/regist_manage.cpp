@@ -324,10 +324,18 @@ void* device_regist(void* arg)
                     }
                 }
             }
-            // 等待时间戳超时（监听计数耗尽），此次注册失败
+            // 等待时间戳超时（监听计数耗尽），重试发送确认包
             if (!timestamp_received && listen_num == 0) {
-                hardware_cleanup();
-                state = RegistState::Failed;
+                LOG_WARN("regist", "%s", "Timestamp not received, retrying confirm...");
+                regist_num++;
+                if (regist_num >= 5) {
+                    LOG_ERROR("regist", "%s", "Timestamp retry exhausted, registration failed");
+                    hardware_cleanup();
+                    state = RegistState::Failed;
+                } else {
+                    listen_num = 8;
+                    state = RegistState::SendConfirm;
+                }
             }
             break;
         }

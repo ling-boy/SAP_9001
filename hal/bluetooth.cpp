@@ -102,6 +102,26 @@ int bluetooth_open(std::string &device_mac)
         if (write_port(fd, DISCONNECT, strlen((const char*)DISCONNECT)) < 0) {
             LOG_WARN("bluetooth", "write DISCONNECT failed");
         }
+        /* 等待 DISCONNECT 响应 */
+        {
+            struct timeval disc_timeout;
+            disc_timeout.tv_sec = 2;
+            disc_timeout.tv_usec = 0;
+            fd_set disc_fdset;
+            FD_ZERO(&disc_fdset);
+            FD_SET(fd, &disc_fdset);
+            int disc_ret = select(fd + 1, &disc_fdset, NULL, NULL, &disc_timeout);
+            if (disc_ret > 0) {
+                char disc_buf[64];
+                int disc_n = read_port(fd, disc_buf, sizeof(disc_buf) - 1);
+                if (disc_n > 0) {
+                    disc_buf[disc_n] = '\0';
+                    LOG_INFO("bluetooth", "DISCONNECT response: %s", disc_buf);
+                }
+            } else {
+                LOG_WARN("bluetooth", "DISCONNECT: no response or timeout");
+            }
+        }
         /* jd_close.sh: 拉高switch管脚，蓝牙模块退出AT命令模式 */
         std::string bt_close = CFG_STR("paths", "bt_close_script", "/home/root/jd_close.sh");
         system(bt_close.c_str());

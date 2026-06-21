@@ -53,7 +53,7 @@ public:
         std::string isr_mac;
         std::string current_time;
         std::string cpu_occupy;
-        char communicate_status[7] = "0000";  // 增大到7，确保null终止符不被覆盖
+        char communicate_status[7] = "000000";  // 6个通信设备状态 + null终止符
         int monitor_time = 4;
     };
 
@@ -228,6 +228,7 @@ public:
     void setIdentityIsrMac(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.isr_mac = val; }
     void setIdentityCurrentTime(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.current_time = val; }
     void setIdentityCpuOccupy(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.cpu_occupy = val; }
+    void setIdentityMonitorTime(int val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.monitor_time = val; }
 
     /**
      * @brief 线程安全地设置 communicate_status

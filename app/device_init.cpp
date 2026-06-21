@@ -131,7 +131,7 @@ int lora_reinit(int old_fd)
 int wifi_reinit(int old_fd)
 {
     auto& ctx = sap::DeviceContext::instance();
-    close(old_fd);
+    // 先执行重初始化逻辑，成功后再关闭旧 fd（避免竞态条件）
     if (system("ifconfig wlan0 down") != 0)
         LOG_ERROR("dev_init", "%s", "wifi_reinit: ifconfig wlan0 down failed");
     sleep(2);
@@ -166,6 +166,8 @@ int wifi_reinit(int old_fd)
         wifi_fd_connect = connect_nonb(fd_wifi_sock, (struct sockaddr*)&wifi_ser_addr, sizeof(struct sockaddr_in), cfg_connect_timeout());
         if (wifi_fd_connect < 0)
         {
+            // 失败时也要关闭旧 fd
+            close(old_fd);
             LOG_ERROR("dev_init", "wifi: connect: %s", strerror(errno));
             ctx.fds().wifi = -1;
             system("killall wpa_supplicant");
@@ -174,6 +176,8 @@ int wifi_reinit(int old_fd)
         }
         else
         {
+            // 成功后关闭旧 fd
+            close(old_fd);
             LOG_INFO("dev_init", "%s", "wifi: connect server success");
             LOG_INFO("dev_init", "Init success: wifi. Device descriptor = %d", fd_wifi_sock);
             ctx.fds().wifi = fd_wifi_sock;
@@ -187,21 +191,26 @@ int wifi_reinit(int old_fd)
 int bt_reinit(int old_fd)
 {
     auto& ctx = sap::DeviceContext::instance();
-    close(old_fd);
+    // 先打开新 fd，成功后再关闭旧 fd（避免竞态条件）
     std::string bt_mac = ctx.getIdentityBtMac();
-    ctx.fds().bt = bluetooth_open(bt_mac);
-    if (-1 == ctx.fds().bt)
+    int new_fd = bluetooth_open(bt_mac);
+    if (-1 == new_fd)
     {
+        // 失败时关闭旧 fd
+        close(old_fd);
         ctx.setIdentityBtMac("");
         LOG_ERROR("dev_init", "%s", "-> No blue_tooth device");
         return -1;
     }
     else
     {
-        LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
+        // 成功后关闭旧 fd
+        close(old_fd);
+        ctx.fds().bt = new_fd;
+        LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", new_fd);
         ctx.setCommunicateStatus(2, '1');  // BT id=3, index=2
         system("echo 1 > /sys/class/leds/green/brightness");
-        return ctx.fds().bt;
+        return new_fd;
     }
 }
 
@@ -274,9 +283,9 @@ int dev_init()
             ctx.fds().device_id.push_back(fd);
 
             // 仅客户端设备设置 communicate_status
-            // 索引：LoRa=0, WiFi=1, BT=2, LAN=3
+            // 索引：LoRa=0, WiFi=1, BT=2, LAN=3, LAN_server=4, 4G=5
             int status_idx = id - 1;
-            if (status_idx >= 0 && status_idx <= 3) {
+            if (status_idx >= 0 && status_idx <= 5) {
                 ctx.setCommunicateStatus(status_idx, '1');
             }
         }

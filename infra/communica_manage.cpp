@@ -185,13 +185,26 @@ bool communicaManage::reinit(int id, int para)
 
         // 重初始化成功，重置熔断器
         temp->com->breaker.recordSuccess();
-        auto func = temp->com->reback[0];  // 保存回调函数
+
+        // 保存所有 3 个回调槽位
+        std::function<int(int)> callbacks[3];
+        for (int i = 0; i < 3; i++) {
+            callbacks[i] = temp->com->reback[i];
+        }
+
         deletecommunicateNode(id);
         if (!addCommunicateNode(id, fd)) {
             LOG_ERROR("comm_mgr", "%s", "Reinit failed: add node failed");
             return false;
         }
-        callbackRgist(id, 0, std::move(func));
+
+        // 恢复所有 3 个回调槽位
+        for (int i = 0; i < 3; i++) {
+            if (callbacks[i]) {
+                callbackRgist(id, i, std::move(callbacks[i]));
+            }
+        }
+
         LOG_INFO("comm_mgr", "Reinit device ID=%d success", id);
         return true;
     }

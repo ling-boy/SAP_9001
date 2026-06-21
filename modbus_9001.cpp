@@ -55,17 +55,16 @@ static MessageQueue<std::string>* g_pTransMessage = nullptr;
 static int g_fdWatch = -1;
 
 /**
- * @brief 信号处理函数，持久化未发送数据后退出
- * @details 处理 SIGTERM/SIGINT，将 transMessage 队列中的数据写入文件，
- *          关闭LED、同步RTC，然后退出进程
+ * @brief 信号处理公共清理函数（async-signal-safe）
+ * @details 持久化未发送数据，写入PID=0通知看门狗脚本，然后退出进程。
+ *          所有操作均为 async-signal-safe 函数。
  */
-static void signal_handler(int signum)
+static void signal_cleanup_and_exit()
 {
-    (void)signum;
     /* 持久化未发送的数据（无锁版本，避免信号处理器中死锁） */
     if (g_pTransMessage)
         drainAndPersistUnsafe(*g_pTransMessage);
-    /* 写入PID=0通知看门狗脚本（lseek/write/close 为 async-signal-safe） */
+    /* 写入PID=0通知看门狗脚本（lseek/write/close/ftruncate 为 async-signal-safe） */
     if (g_fdWatch >= 0) {
         lseek(g_fdWatch, 0, SEEK_SET);
         const char* zero = "0";
@@ -78,25 +77,23 @@ static void signal_handler(int signum)
 }
 
 /**
+ * @brief 信号处理函数，持久化未发送数据后退出
+ * @details 处理 SIGTERM/SIGINT
+ */
+static void signal_handler(int signum)
+{
+    (void)signum;
+    signal_cleanup_and_exit();
+}
+
+/**
  * @brief 看门狗超时信号处理函数
  * @details 处理 SIGUSR1，当看门狗检测到线程超时时触发
- *          执行与 signal_handler 相同的清理逻辑后退出
  */
 static void watchdog_signal_handler(int signum)
 {
     (void)signum;
-    /* 持久化未发送的数据 */
-    if (g_pTransMessage)
-        drainAndPersistUnsafe(*g_pTransMessage);
-    /* 写入PID=0通知看门狗脚本 */
-    if (g_fdWatch >= 0) {
-        lseek(g_fdWatch, 0, SEEK_SET);
-        const char* zero = "0";
-        write(g_fdWatch, zero, 1);
-        ftruncate(g_fdWatch, 1);
-        close(g_fdWatch);
-    }
-    _exit(0);
+    signal_cleanup_and_exit();
 }
 
 /**
