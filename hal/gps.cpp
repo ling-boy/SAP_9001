@@ -85,7 +85,8 @@ void* GET_GPS(void* arg)
     if (system(gps_cmd.c_str()) < 0) {
         LOG_WARN("gps", "system() failed to launch gps_test.sh");
     }
-    sleep(60);
+    int gps_init_delay = CFG_INT("serial.gps", "init_delay_sec", 60);
+    sleep(gps_init_delay);
     int ret;
     std::string gps_port = CFG_STR("serial.gps", "port", "/dev/ttymxc7");
     char buf[300] = {0};
@@ -113,8 +114,8 @@ void* GET_GPS(void* arg)
         ret = set_opt1(fd, 9600, 8, 'n', 1);
         if (ret < 0) {
             LOG_ERROR("gps", "set_opt1 failed");
-            close(fd);
-            return NULL;
+            // 直接跳出，让 pthread_cleanup 统一处理 fd 关闭
+            goto gps_exit;
         }
         int flag = 0;
         char in;
@@ -193,6 +194,7 @@ void* GET_GPS(void* arg)
         }
     }
 
+gps_exit:
     // 执行清理（关闭 fd）
     pthread_cleanup_pop(1);
     return NULL;

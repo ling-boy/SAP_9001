@@ -18,6 +18,15 @@
 
 /* 所有全局状态已迁移至 DeviceContext 单例 */
 
+/**
+ * @warning **传感器共享串口风险**：船载传感器和大气传感器共用 /dev/ttymxc2 串口。
+ *          两个传感器驱动线程分别以不同的 Modbus 从站地址轮询同一 RS485 总线。
+ *          Modbus RTU 协议本身支持多从站，但以下场景存在风险：
+ *          1. 若两个线程同时调用 modbus_read_registers()，底层串口读写可能交错
+ *          2. 当前通过 pthread_cond_wait 机制实现交替采集，避免了并发冲突
+ *          3. 若未来引入更多传感器或改变采集策略，需考虑互斥保护串口访问
+ */
+
 /* ====== SensorDriver 基类实现 ====== */
 
 SensorDriver::SensorDriver(CSoftwareWdt* wdt, int wdt_id,
@@ -32,28 +41,22 @@ SensorDriver::~SensorDriver()
 
 /**
  * @brief 将4字节数据转换为32位浮点数（IEEE 754）
+ * @details 使用 memcpy 按字节组装为 uint32_t，再通过 memcpy 转为 float，
+ *          避免手动解析符号/指数/尾数的浮点精度误差
  */
 static float float2decimal(long int byte0, long int byte1, long int byte2, long int byte3)
 {
-    long int realbyte0, realbyte1, realbyte2, realbyte3;
-    char S;
-    long int E;
-    double M;
-    float D;
-    realbyte0 = byte0;
-    realbyte1 = byte1;
-    realbyte2 = byte2;
-    realbyte3 = byte3;
-    if ((realbyte0 & 0x80) == 0) {
-        S = 0;
-    }
-    else {
-        S = 1;
-    }
-    E = (((realbyte0 & 0x7F) << 1) | ((realbyte1 & 0x80) >> 7)) - 127;
-    M = ((realbyte1 & 0x7f) << 16) | (realbyte2 << 8) | realbyte3;
-    D = pow(-1.0, S) * (1.0 + M / pow(2.0, 23)) * pow(2.0, E);
-    return D;
+    uint8_t bytes[4] = {
+        static_cast<uint8_t>(byte0 & 0xFF),
+        static_cast<uint8_t>(byte1 & 0xFF),
+        static_cast<uint8_t>(byte2 & 0xFF),
+        static_cast<uint8_t>(byte3 & 0xFF)
+    };
+    uint32_t raw;
+    memcpy(&raw, bytes, sizeof(raw));
+    float result;
+    memcpy(&result, &raw, sizeof(result));
+    return result;
 }
 
 /** @brief 获取16位数据的高8位 */

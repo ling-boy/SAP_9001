@@ -120,6 +120,16 @@ int drainAndPersist(MessageQueue<std::string>& buffer){
     return count;
 }
 
+/**
+ * @brief 从消息队列中取出所有数据并持久化到文件（非线程安全版本）
+ * @warning **已知风险**：此函数调用 buffer.drainUnsafe() 而非线程安全的 popAll()，
+ *          仅应在信号处理器（signal handler）等无法获取锁的上下文中使用。
+ *          POSIX 信号处理器中只能调用 async-signal-safe 函数，
+ *          此处使用了 open/write/close（信号安全）但 drainUnsafe 内部操作
+ *          std::vector 移动语义不属于严格安全操作。
+ *          实践中在嵌入式 Linux 单线程信号处理场景下风险可控，
+ *          但不应在多线程信号处理或非信号上下文中调用此函数。
+ */
 int drainAndPersistUnsafe(MessageQueue<std::string>& buffer){
     std::vector<std::string> items;
     buffer.drainUnsafe(items);
@@ -149,6 +159,10 @@ int readFromFile(std::queue<std::string>& recvQueue){
     char* buffer = NULL;
     size_t num = 0;
     int count = 0;
+    /* @note getline 内部使用 realloc 管理 buffer 堆内存，
+     *       每次循环结束后 free 并重置为 NULL 以避免内存泄漏。
+     *       在嵌入式场景下，频繁的 malloc/free 可能导致堆碎片，
+     *       但 getline 是 POSIX 标准接口，此处使用合理。 */
     while(getline(&buffer, &num, fs) != -1){
         size_t len = strlen(buffer);
         if (len == 0) { free(buffer); buffer = NULL; num = 0; continue; }
@@ -216,14 +230,9 @@ std::string buildHeartbeat()
 
     // 计算长度：数据段长度 + 固定字段长度(设备ID + 网络ID + 通信类型 = 2+4+1 = 7)
     int length = strlen(data_segment) + 7;
-    std::string len_str = "";
-    change(length, len_str);
-
-    // 确保长度字段4位
-    int num = len_str.length();
-    if (num == 1) len_str = "000" + len_str;
-    else if (num == 2) len_str = "00" + len_str;
-    else if (num == 3) len_str = "0" + len_str;
+    char len_hex[5];
+    snprintf(len_hex, sizeof(len_hex), "%04X", length);
+    std::string len_str(len_hex);
 
     // 组装心跳包
     char packet[256];

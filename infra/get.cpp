@@ -125,6 +125,12 @@ std::string cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n)
  * @brief 获取CPU和内存使用率的组合字符串
  * @details 线程安全版本，使用互斥锁保护静态变量
  *          优化：先检查缓存（持锁），采样时释放锁避免阻塞其他线程
+ *
+ * @note **缓存竞争说明**：采样阶段（约100ms usleep）未持锁，
+ *       多个线程可能同时进入采样路径并重复计算。
+ *       这是刻意的设计权衡：避免持锁100ms阻塞心跳线程。
+ *       最后一个完成采样的线程会更新缓存，结果对心跳包精度足够。
+ *       若需要严格单次采样，可使用 std::call_once 或 atomic flag。
  */
 std::string get_cpuOccupy(){
     static std::string cached_result;

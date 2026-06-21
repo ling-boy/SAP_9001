@@ -54,7 +54,13 @@ struct communicateNode {
 
 /**
  * @brief 通信设备管理类
- * @details 使用智能指针管理链表节点，自动释放内存，消除内存泄漏风险
+ * @details 使用自定义单链表管理通信设备节点，而非 std::forward_list 或 std::vector，
+ *          原因如下：
+ *          1. 设备数量极少（通常 2~4 个），链表遍历开销可忽略
+ *          2. 链表支持中间节点的高效插入/删除（reinit 场景需要先删后插）
+ *          3. 使用 unique_ptr 管理节点生命周期，消除手动 new/delete 的内存泄漏风险
+ *          4. 若设备数量固定且无需频繁增删，std::vector 更优（缓存友好），
+ *             但当前链表设计对嵌入式小规模场景已足够
  */
 class communicaManage
 {
@@ -198,6 +204,14 @@ private:
 
     /** @brief 排序比较函数，用于按ID从小到大排序 */
     static bool cmp(const std::vector<int>& a, const std::vector<int>& b);
+
+    /**
+     * @brief 公共链表插入逻辑（私有方法，调用方需已持有 mtx_ 锁）
+     * @param id  设备ID
+     * @param com 通信设备智能指针
+     * @return 成功返回true，ID已存在返回false
+     */
+    bool insertNode(int id, std::unique_ptr<communicate> com);
 
     /** @brief 互斥锁，保护链表操作的线程安全 */
     std::recursive_mutex mtx_;

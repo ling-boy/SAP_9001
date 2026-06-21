@@ -3,6 +3,7 @@
 #include "infra/logger.h"
 #include "infra/io_utils.h"
 #include "infra/retry_policy.h"
+#include "infra/config.h"
 #include "core/device_context.h"
 #include <cstdlib>
 #include <sys/time.h>
@@ -19,7 +20,8 @@ static void hardware_cleanup()
     system("echo 0 > /sys/class/leds/red/brightness");
     system("echo 0 > /sys/class/leds/yellow/brightness");
     system("echo 0 > /sys/class/leds/green/brightness");
-    system("/home/root/power_12v.sh off");
+    std::string power_off = CFG_STR("paths", "power_12v_script", "/home/root/power_12v.sh") + " off";
+    system(power_off.c_str());
     system("hwclock -w");
     system("killall wpa_supplicant");
     sleep(1);
@@ -119,7 +121,7 @@ void* device_regist(void* arg)
                 tv.tv_sec = 15;
                 tv.tv_usec = 0;
                 myCount++;
-                if (myCount >= 1000) {
+                if (myCount >= 100) {
                     state = RegistState::Failed;
                     break;
                 }

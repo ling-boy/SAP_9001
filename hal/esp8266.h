@@ -1,7 +1,10 @@
 /**
  * @file esp8266.h
  * @brief ESP8266 WiFi模块接口
- * @details 提供ESP8266模块的AT指令检测、重启和AP热点配置功能
+ * @details 预留接口，供后续扩展。
+ *          当前系统主要通过 WiFi STA 模式（wpa_supplicant）连接，
+ *          ESP8266 AP 热点模式作为备选通信方案保留。
+ *          提供ESP8266模块的AT指令检测、重启和AP热点配置功能
  */
 #ifndef _ESP8266_H_
 #define _ESP8266_H_

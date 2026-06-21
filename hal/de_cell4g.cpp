@@ -25,6 +25,7 @@ int hard4g_init(char *net_name)
 {
         int retry_count = 5;
         int success = 1;
+        int sleep_sec = 8;  // 初始等待8秒，后续指数退避
 
         while (retry_count-- && success)
         {
@@ -32,10 +33,12 @@ int hard4g_init(char *net_name)
                 std::string pppd_script = CFG_STR("network.cell4g", "pppd_script", "/home/root/g2020/mokuai/4g/ppp/ppp/quectel-pppd.sh");
                 std::string pppd_cmd = pppd_script + " /dev/ttyUSB5 \"\" \"\" vnet.mobi &";
                 system(pppd_cmd.c_str());
-                /* PPP协商需要较长时间，等待8秒确保拨号完成 */
-                sleep(8);
+                /* PPP协商需要较长时间，等待拨号完成 */
+                sleep(sleep_sec);
                 if (cell4g_detect(net_name) == 0)
                         success = 0;
+                else
+                        sleep_sec = std::min(sleep_sec * 2, 32);  // 指数退避，最大32秒
         }
 
         if (success == 0)

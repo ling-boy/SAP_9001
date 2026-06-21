@@ -27,7 +27,6 @@ using sap::write_full;
 
 // 使用统一的协议常量定义
 #include "protocol/constants.h"
-#define RX_SIZE     58
 
 /* 所有全局状态已迁移至 DeviceContext 单例 */
 extern const int softdogTimeout;
@@ -48,7 +47,7 @@ void* send_mess(void* arg)
     const char* const threadname = "trans_message";
     int wdt_id = -1;
     wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, softdogTimeout);
-    int flag = true;
+    bool flag = true;
     int heartbeat_counter = 0;
     const int HEARTBEAT_INTERVAL = 2;  // 每2次超时（约60秒）发送一次心跳
 
@@ -138,11 +137,8 @@ void* send_mess(void* arg)
                             LOG_INFO("transmit", "Message counter: %d", count);
                             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                             LOG_INFO("transmit", "%s", "thread of trans_message feed dog success");
-                            pthread_mutex_lock(&ctx.sensorSync().mtx);
-                            ctx.sensorSync().gas_data_ready = 1;
-                            ctx.sensorSync().ship_data_ready = 1;
-                            pthread_mutex_unlock(&ctx.sensorSync().mtx);
-                            pthread_cond_broadcast(&ctx.sensorSync().cond);
+                            ctx.notifySensorDataReady(true);   /* ship_data_ready = 1 */
+                            ctx.notifySensorDataReady(false);  /* gas_data_ready = 1 */
 
                             // 先取后发模式：在锁内取出所有数据，解锁后逐个发送
                             std::vector<std::string> pending_packets;

@@ -35,7 +35,8 @@ std::string ensureLen_4(int param)
 std::string ensure_crc4_packet(unsigned int crc, const std::string& len_str, const std::string& data)
 {
     // 使用栈缓冲区替代堆分配，避免 new/delete 碎片
-    char buf[512];
+    // 增大到2048字节，确保23个船载传感器的数据段（约600+字节）不会溢出
+    char buf[2048];
     int total_len = sizeof(buf);
 
     if (crc > 4095)
@@ -120,13 +121,8 @@ std::string time_now_to_string()
     string_formater(p->tm_sec, stringsec);
     string_formater_usec(tv.tv_usec / 1000, stringusec);
 
-    strcpy(timestamp_now, stringyear);
-    strcat(timestamp_now, stringmonth);
-    strcat(timestamp_now, stringday);
-    strcat(timestamp_now, stringhour);
-    strcat(timestamp_now, stringmin);
-    strcat(timestamp_now, stringsec);
-    strcat(timestamp_now, stringusec);
+    snprintf(timestamp_now, sizeof(timestamp_now), "%s%s%s%s%s%s%s",
+             stringyear, stringmonth, stringday, stringhour, stringmin, stringsec, stringusec);
 
     return std::string(timestamp_now);
 }

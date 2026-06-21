@@ -28,3 +28,6 @@
 #define TIME_SEND               "20"    ///< 时间戳下发
 #define REQ_ACC_HEART           "EF"    ///< 接入设备心跳
 #define REQ_GATE_HEART          "FF"    ///< 网关心跳
+
+/** @brief 接收缓冲区大小（协议包最大长度） */
+#define RX_SIZE                 58

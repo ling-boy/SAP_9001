@@ -9,6 +9,7 @@
 #include <string.h>
 #include <string>
 #include "infra/logger.h"
+#include "infra/config.h"
 
 #define SERVERPORT 8080
 
@@ -20,6 +21,7 @@
 
 /**
  * @brief 打开ESP8266 WiFi模块并验证设备是否正常响应
+ * @note 预留接口，供后续扩展。当前系统主要使用 WiFi STA 模式。
  *
  * 通过串口打开ESP8266设备，发送AT指令检测设备是否在线，
  * 然后重启设备并等待重启完成标志。
@@ -147,9 +149,10 @@ int esp8266_open()
 
 /**
  * @brief 配置ESP8266为AP热点模式并开启TCP服务器
+ * @note 预留接口，供后续扩展。当前系统主要使用 WiFi STA 模式。
  *
- * 设置ESP8266工作在AP模式，配置热点名称为"g202001"，密码为"12345678"，
- * 开启多连接模式并在8080端口启动TCP服务器。
+ * 设置ESP8266工作在AP模式，热点名称、密码、端口等通过配置文件读取，
+ * 开启多连接模式并在配置端口启动TCP服务器。
  *
  * @param fd 已打开的ESP8266串口文件描述符
  * @return 成功返回0
@@ -160,7 +163,14 @@ int esp8266_config(int fd)
     /* AT+CWMODE=2 设置ESP8266为AP(热点)模式 */
     uint8_t CWMODE[] = "AT+CWMODE=2\r\n";
     /* AT+CWSAP 配置热点名称和密码，格式: AT+CWSAP=<ssid>,<pwd>,<chl>,<ecn> */
-    uint8_t CWSAP[] = "AT+CWSAP=\"g202001\",\"12345678\",1,3\r\n";
+    std::string ssid = CFG_STR("network.esp8266", "ssid", "g202001");
+    std::string pwd = CFG_STR("network.esp8266", "password", "12345678");
+    int channel = CFG_INT("network.esp8266", "channel", 1);
+    int ecn = CFG_INT("network.esp8266", "ecn", 3);
+    char cwsap_buf[128];
+    snprintf(cwsap_buf, sizeof(cwsap_buf), "AT+CWSAP=\"%s\",\"%s\",%d,%d\r\n",
+             ssid.c_str(), pwd.c_str(), channel, ecn);
+    std::string CWSAP_CMD(cwsap_buf);
 #if USE_PROTOCOL == USE_UDP
     uint8_t CIPSTART[] = "AT+CIPSTART=\"UDP\",\"192.168.4.255\",2345,2345,0\r\n";
     uint8_t CIPMODE[] = "AT+CIPMODE=1\r\n";
@@ -169,7 +179,10 @@ int esp8266_config(int fd)
     /* AT+CIPMUX=1 开启多连接模式(最多5个客户端) */
     uint8_t CIPMUX[] = "AT+CIPMUX=1\r\n";
     /* AT+CIPSERVER=1,8080 在8080端口开启TCP服务器 */
-    uint8_t CIPSERVER[] = "AT+CIPSERVER=1,8080\r\n";
+    int server_port = CFG_INT("network.esp8266", "server_port", 8080);
+    char cipserver_buf[64];
+    snprintf(cipserver_buf, sizeof(cipserver_buf), "AT+CIPSERVER=1,%d\r\n", server_port);
+    std::string CIPSERVER_CMD(cipserver_buf);
 #endif
 
     if (set_opt1(fd, 115200, 8, 'n', 1) < 0) {
@@ -191,7 +204,7 @@ int esp8266_config(int fd)
     }
     sleep(DELAY_SEC);
     /* 配置热点名称和密码 */
-    if (write_port(fd, CWSAP, strlen((const char*)CWSAP)) < 0) {
+    if (write_port(fd, CWSAP_CMD.c_str(), CWSAP_CMD.size()) < 0) {
         LOG_WARN("esp8266", "config write CWSAP failed");
     }
     sleep(DELAY_SEC);
@@ -218,8 +231,8 @@ int esp8266_config(int fd)
         LOG_WARN("esp8266", "config write CIPMUX failed");
     }
     sleep(DELAY_SEC);
-    /* 开启TCP服务器，监听8080端口 */
-    if (write_port(fd, CIPSERVER, strlen((const char*)CIPSERVER)) < 0) {
+    /* 开启TCP服务器，监听配置端口 */
+    if (write_port(fd, CIPSERVER_CMD.c_str(), CIPSERVER_CMD.size()) < 0) {
         LOG_WARN("esp8266", "config write CIPSERVER failed");
     }
     sleep(DELAY_SEC);

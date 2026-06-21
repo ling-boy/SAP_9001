@@ -1,6 +1,11 @@
 /**
  * @file wifi_strategy.h
  * @brief WiFi 通信策略
+ * @note **头文件循环依赖风险**：本文件 include 了 "app/device_init.h"，
+ *       而 device_init.h 可能间接 include 本文件的同级头文件。
+ *       当前通过 #pragma once 和前向声明避免了实际循环，
+ *       但若未来 WifiStrategy 需要访问更多 app 层接口，
+ *       建议将 WiFi 初始化逻辑移至 .cpp 文件，仅在 .h 中声明接口。
  */
 #pragma once
 

@@ -51,13 +51,23 @@ public:
         std::string isr_mac;
         std::string current_time;
         std::string cpu_occupy;
-        char communicate_status[6] = "0000";  // 增大到6，防止id=5越界
+        char communicate_status[7] = "0000";  // 增大到7，确保null终止符不被覆盖
         int monitor_time = 4;
     };
 
     // ======================================================================
     // 通信设备文件描述符
     // ======================================================================
+    /**
+     * @brief 通信设备文件描述符集合
+     * @warning **线程安全风险**：本结构体的所有成员均无锁保护。
+     *          多线程并发读写 fds_.flag_wifi / fds_.lora 等字段存在数据竞争。
+     *          当前设计依赖以下隐式约束：
+     *          1. lora/wifi/bt/lan 等 fd 在初始化后不会被修改（只读语义）
+     *          2. flag_wifi 仅在注册阶段单线程写入
+     *          3. gps_failed 仅在 GPS 线程内写入，其他线程只读
+     *          若未来引入热插拔或多线程写入，需为 fds_ 增加互斥锁。
+     */
     struct CommFds {
         int lora = -1;
         int wifi = -1;
@@ -115,6 +125,14 @@ public:
     // ======================================================================
     // 访问接口
     // ======================================================================
+    /**
+     * @brief 获取可变引用的访问器
+     * @note **设计权衡**：返回非 const 引用会绕过 identity_mtx_ 的保护，
+     *       调用方若在持锁状态外修改返回值将导致数据竞争。
+     *       已提供 setIdentity*() 等线程安全方法，新代码应优先使用。
+     *       identity()/fds()/queues()/sensorSync() 等返回可变引用的方法
+     *       保留是为了兼容现有调用路径，后续可逐步迁移至安全接口。
+     */
     DeviceIdentity& identity() { return identity_; }
     const DeviceIdentity& identity() const { return identity_; }
 

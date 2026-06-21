@@ -152,7 +152,7 @@ int bluetooth_open(std::string &device_mac)
                             FD_ZERO(&fdset);
                             FD_SET(fd, &fdset);
                             struct timeval scan_timeout;
-                            scan_timeout.tv_sec = 30;
+                            scan_timeout.tv_sec = 10;
                             scan_timeout.tv_usec = 0;
                             ret = select(fd + 1, &fdset, NULL, NULL, &scan_timeout);
                             if(ret <= 0)

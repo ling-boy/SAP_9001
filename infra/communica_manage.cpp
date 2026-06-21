@@ -43,13 +43,10 @@ communicateNode* communicaManage::findcommunicate(int id)
 }
 
 /**
- * @brief 添加带超时阈值的通信设备节点
+ * @brief 公共链表插入逻辑（调用方需已持有 mtx_ 锁）
  */
-bool communicaManage::addCommunicateNode(int id, int fd, int timeout)
+bool communicaManage::insertNode(int id, std::unique_ptr<communicate> com)
 {
-    std::lock_guard<std::recursive_mutex> lock(mtx_);
-    auto com = createComnode(fd, timeout);
-
     if (head_->com == nullptr)
     {
         head_->com = std::move(com);
@@ -82,43 +79,21 @@ bool communicaManage::addCommunicateNode(int id, int fd, int timeout)
 }
 
 /**
+ * @brief 添加带超时阈值的通信设备节点
+ */
+bool communicaManage::addCommunicateNode(int id, int fd, int timeout)
+{
+    std::lock_guard<std::recursive_mutex> lock(mtx_);
+    return insertNode(id, createComnode(fd, timeout));
+}
+
+/**
  * @brief 添加空设备节点（未初始化的通信设备）
  */
 bool communicaManage::addCommunicateNode(int id)
 {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    auto com = createComnode();
-
-    if (head_->com == nullptr)
-    {
-        head_->com = std::move(com);
-        head_->id = id;
-        head_->enabled = false;
-        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-        return true;
-    }
-    else
-    {
-        communicateNode* temp = head_.get();
-        while (temp != nullptr)
-        {
-            if (temp->id == id)
-            {
-                LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
-                return false;
-            }
-            if (temp->next == nullptr)
-                break;
-            temp = temp->next.get();
-        }
-        auto newNode = std::make_unique<communicateNode>();
-        newNode->com = std::move(com);
-        newNode->id = id;
-        newNode->enabled = false;
-        temp->next = std::move(newNode);
-        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-        return true;
-    }
+    return insertNode(id, createComnode());
 }
 
 /**
@@ -127,38 +102,7 @@ bool communicaManage::addCommunicateNode(int id)
 bool communicaManage::addCommunicateNode(int id, int fd)
 {
     std::lock_guard<std::recursive_mutex> lock(mtx_);
-    auto com = createComnode(fd);
-
-    if (head_->com == nullptr)
-    {
-        head_->com = std::move(com);
-        head_->id = id;
-        head_->enabled = false;
-        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-        return true;
-    }
-    else
-    {
-        communicateNode* temp = head_.get();
-        while (temp != nullptr)
-        {
-            if (temp->id == id)
-            {
-                LOG_WARN("comm_mgr", "Add node failed, ID=%d already exists", id);
-                return false;
-            }
-            if (temp->next == nullptr)
-                break;
-            temp = temp->next.get();
-        }
-        auto newNode = std::make_unique<communicateNode>();
-        newNode->com = std::move(com);
-        newNode->id = id;
-        newNode->enabled = false;
-        temp->next = std::move(newNode);
-        LOG_INFO("comm_mgr", "Add device ID=%d success", id);
-        return true;
-    }
+    return insertNode(id, createComnode(fd));
 }
 
 /**
