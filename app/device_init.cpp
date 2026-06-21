@@ -103,14 +103,16 @@ done:
 int lora_reinit(int old_fd)
 {
     auto& ctx = sap::DeviceContext::instance();
-    close(old_fd);
-    ctx.fds().lora = lora_open();
-    if (ctx.fds().lora == -1)
+    // 先打开新 fd，成功后再关闭旧 fd，避免 double-close
+    int new_fd = lora_open();
+    if (new_fd == -1)
     {
         LOG_ERROR("dev_init", "%s", "lora reinit failed");
         return -1;
     }
-    else
+    // 成功后关闭旧 fd
+    close(old_fd);
+    ctx.fds().lora = new_fd;
     {
         ctx.identity().communicate_status[0] = '1';
         LOG_INFO("dev_init", "%s", "lora reinit success");
@@ -274,9 +276,10 @@ int dev_init()
             case 5: ctx.fds().lan_server = fd; break;
         }
 
-        // communicate_status 索引：LoRa=0, WiFi=1, LAN=2, BT=3
-        if (id >= 1 && id <= 4) {
-            ctx.identity().communicate_status[id - 1] = '1';
+        // communicate_status 索引：LoRa=0, WiFi=1, BT=2, LAN=3
+        int status_idx = id - 1;
+        if (status_idx >= 0 && status_idx < (int)sizeof(ctx.identity().communicate_status) - 1) {
+            ctx.identity().communicate_status[status_idx] = '1';
         }
 
         LOG_INFO("dev_init", "Init success: %s, fd=%d", strategy->typeName().c_str(), fd);

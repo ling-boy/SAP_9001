@@ -29,12 +29,6 @@
 #include "infra/message_queue.h"
 #include <queue>
 /**
- * @brief 程序退出处理函数，设置全局停止标志位
- * @param signum 信号编号
- */
-void stop(int signum);
-
-/**
  * @brief 将0-15的整数转换为对应的十六进制字符
  * @param num 整数（0~15）
  * @return 十六进制字符字符串
@@ -48,21 +42,6 @@ std::string switch10_16(int num);
  * @return 始终返回0
  */
 int change(long long int num, std::string& str);
-
-/**
- * @brief 处理17协议（网关参数下发），提取ISR的MAC、设备ID、网络ID
- * @param buff 17协议数据包
- * @return 成功返回0，失败返回-1
- */
-int protoc_17(std::string buff);
-
-/**
- * @brief 处理03协议（数据请求），从数据包中提取通信方式
- * @param buff               03协议数据包
- * @param communicate_method 输出参数，存储通信方式
- * @return 成功返回0
- */
-int protoc_03(const std::string buff, std::string *communicate_method);
 
 /**
  * @brief 将整数转换为带一位小数的浮点数

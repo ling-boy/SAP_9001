@@ -22,7 +22,8 @@ inline int write_full(int fd, const char* buf, size_t len)
     size_t total = 0;
     while (total < len) {
         ssize_t n = write(fd, buf + total, len - total);
-        if (n <= 0) return -1;
+        if (n == 0) return -2;
+        if (n < 0)  return -1;
         total += n;
     }
     return 0;

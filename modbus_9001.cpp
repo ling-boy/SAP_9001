@@ -54,9 +54,6 @@ static MessageQueue<std::string>* g_pTransMessage = nullptr;
 /** @brief 写PID文件的fd，供信号处理函数使用 */
 static int g_fdWatch = -1;
 
-/** @brief 全局停止标志位，由 stop() 设置，当前仅用于 dev_init 失败路径 */
-volatile sig_atomic_t g_stop_flag = 0;
-
 /**
  * @brief 信号处理函数，持久化未发送数据后退出
  * @details 处理 SIGTERM/SIGINT，将 transMessage 队列中的数据写入文件，
@@ -165,8 +162,8 @@ int main()
     LOG_INFO("main", "CPU Usage Rate: %s", ctx.identity().cpu_occupy.c_str());
     std::vector<std::vector<int>> vec;
     vec = ctx.commManager().getALLIfd();
-    deviceRegist registObj(&ctx.softwareWdt(), &vec);
-    if (pthread_create(&ctx.threads().device_regist, NULL, device_regist, &registObj) != 0) {
+    deviceRegist* registObj = new deviceRegist(&ctx.softwareWdt(), &vec);
+    if (pthread_create(&ctx.threads().device_regist, NULL, device_regist, registObj) != 0) {
         LOG_ERROR("main", "pthread_create tid_deviceRegist failed");
         ctx.threads().device_regist = 0;
     }
@@ -177,12 +174,15 @@ int main()
     void* regRet;
     if (ctx.threads().device_regist != 0 && pthread_join(ctx.threads().device_regist, &regRet) == 0)
     {
+        delete registObj;
         if (regRet == (void*)-1) {
             LOG_ERROR("main", "Device registration failed");
             sleep(30);
             write_pid_file(getWatchPath().c_str(), "0");
             return 0;
         }
+    } else {
+        delete registObj;
     }
     LOG_INFO("main", "Device Registration Successful");
     int numRead = readFromFile(ctx.queues().offline_cache);

@@ -63,6 +63,17 @@ static int process_gps(char* line, char* lat, int lat_size, char* flag_lat, int 
 }
 
 /**
+ * @brief GPS fd 清理函数（pthread_cleanup 使用）
+ */
+static void gps_fd_cleanup(void* arg) {
+    int fd = *static_cast<int*>(arg);
+    if (fd >= 0) {
+        close(fd);
+        LOG_INFO("gps", "GPS fd %d closed by cleanup handler", fd);
+    }
+}
+
+/**
  * @brief GPS数据获取线程
  */
 void* GET_GPS(void* arg)
@@ -82,7 +93,8 @@ void* GET_GPS(void* arg)
     char f_lon[5];
     char lat[10];
     char lon[12];
-    int fd;
+    int fd = -1;
+
     fd = open(gps_port.c_str(), O_RDWR | O_NOCTTY);
     if (-1 == fd)
     {
@@ -92,7 +104,11 @@ void* GET_GPS(void* arg)
         ctx.fds().gps_failed = true;
         return NULL;
     }
-    else {
+
+    // 注册清理函数，确保 fd 在 pthread_cancel 时被关闭
+    pthread_cleanup_push(gps_fd_cleanup, &fd);
+
+    {
         LOG_INFO("gps", "Open GPS device success");
         ret = set_opt1(fd, 9600, 8, 'n', 1);
         if (ret < 0) {
@@ -166,6 +182,9 @@ void* GET_GPS(void* arg)
             sleep(2);
         }
     }
+
+    // 执行清理（关闭 fd）
+    pthread_cleanup_pop(1);
     return NULL;
 }
 

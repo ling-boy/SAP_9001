@@ -15,18 +15,6 @@ static std::string getStoreFilePath() {
     return CFG_STR("data", "store_file", "/home/root/storefile.txt");
 }
 
-/** @brief 全局停止标志位，由信号处理器设置，主循环中检测 */
-extern volatile sig_atomic_t g_stop_flag;
-
-/**
- * @brief 程序退出处理函数，仅设置全局停止标志位
- */
-void stop(int signum)
-{
-    (void)signum;
-    g_stop_flag = 1;
-}
-
 /**
  * @brief 将0-15的整数转换为对应的十六进制字符
  */
@@ -82,75 +70,6 @@ float int2pString(int num)
     snprintf(buf, sizeof(buf), "%d.%d", b, a);
     float f = atof(buf);
     return f;
-}
-
-/**
- * @brief 处理17协议（网关参数下发）
- */
-int protoc_17(std::string buff)
-{
-    auto& ctx = sap::DeviceContext::instance();
-    int ret;
-    std::string confirm_message="";
-    if (buff.length() < 54) return -1;
-    std::string recv_protocal = buff.substr(1, 2);
-    if (recv_protocal == REQ_SEND_INFO)
-    {
-
-        std::string recv_mac = buff.substr(16, 16);
-        if (recv_mac == ctx.getIdentityMac())
-        {
-            ctx.setIdentityIsrMac(buff.substr(32, 16));
-            ctx.setIdentityId(buff.substr(48, 2));
-            ctx.setIdentityNetId(buff.substr(50, 4));
-            confirm_message = confirm_message + "$" + "02" + "1" + ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0012" + ctx.getIdentityMac() + ctx.getIdentityId() + "@";
-            ret = write(ctx.fds().lora, confirm_message.c_str(),strlen(confirm_message.c_str()));
-            if (ret <= 0)
-            {
-                LOG_ERROR("protocol", "%s", "write confirm_message failed!");
-                return -1;
-            }else{
-                if (ret < (int)strlen(confirm_message.c_str()))
-                    LOG_WARN("protocol", "write confirm_message partial: %d/%zu bytes", ret, strlen(confirm_message.c_str()));
-                LOG_INFO("protocol", "confirm_message: %s", confirm_message.c_str());
-                return 17;
-            }
-
-        }else
-        {
-
-            return -1;
-        }
-    }else
-    {
-        return -1;
-    }
-}
-
-/**
- * @brief 处理03协议（数据请求）
- */
-int protoc_03(const std::string buff, std::string *communicate_method)
-{
-    auto& ctx = sap::DeviceContext::instance();
-    if (buff.length() < 42) return -1;
-    std::string recv_protocal = buff.substr(1, 2);
-    if (recv_protocal == REQ_DATA)
-    {
-        std::string recv_mac = buff.substr(22, 16);
-        if (recv_mac == ctx.identity().mac)
-        {
-            *communicate_method = buff.substr(38, 4);
-        }else
-        {
-            return -1;
-        }
-
-    }else
-    {
-        return -1;
-    }
-    return 3;
 }
 
 /**

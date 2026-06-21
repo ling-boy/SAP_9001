@@ -58,7 +58,7 @@ std::string cal_memoccupy(MEM_OCCUPY *m)
 	int mem_d;
 	std::string mem;
 	if (m->MemTotal == 0) return "01";
-	mem_use=m->MemFree * 1.0 / (m->MemTotal * 1.0);
+	mem_use=(m->MemTotal - m->MemFree) * 1.0 / (m->MemTotal * 1.0);
 	mem_d = mem_use * 100;
 	if (mem_d > 0) {
 		if (mem_d < 10)
@@ -125,6 +125,15 @@ std::string cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n)
  * @brief 获取CPU和内存使用率的组合字符串
  */
 std::string get_cpuOccupy(){
+    static std::string cached_result;
+    static time_t last_sample_time = 0;
+    time_t now = time(NULL);
+
+    /* 30秒缓存：避免频繁采样阻塞100ms */
+    if (!cached_result.empty() && (now - last_sample_time) < 30) {
+        return cached_result;
+    }
+
     MEM_OCCUPY mem_stat;
     CPU_OCCUPY cpu_stat1;
     CPU_OCCUPY cpu_stat2;
@@ -142,5 +151,8 @@ std::string get_cpuOccupy(){
         return "0101";
     cpu =cal_cpuoccupy(&cpu_stat1, &cpu_stat2);
     cpu_mem=cpu+mem;
+
+    cached_result = cpu_mem;
+    last_sample_time = now;
     return cpu_mem;
 }

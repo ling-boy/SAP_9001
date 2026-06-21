@@ -23,12 +23,6 @@ inline int          cfg_zd_lan_port(){ return CFG_INT("network.lan", "zd_server_
 inline int          cfg_connect_timeout(){ return CFG_INT("timeouts", "connect_sec", 3); }
 
 /**
- * @brief 程序退出处理函数，执行硬件资源清理
- * @param signum 信号编号
- */
-void stop(int signum);
-
-/**
  * @brief 非阻塞connect连接，带超时
  * @param sockfd  套接字描述符
  * @param saptr   远端地址

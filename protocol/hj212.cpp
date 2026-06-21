@@ -97,22 +97,7 @@ void string_formater(int source, char* dest)
 
 void string_formater_usec(int source, char* dest)
 {
-    if (source < 10)
-    {
-        char temp[12];
-        strcpy(dest, "00");
-        snprintf(temp, sizeof(temp), "%d", source);
-        strcat(dest, temp);
-    }
-    else if (source < 100)
-    {
-        char temp[12];
-        strcpy(dest, "0");
-        snprintf(temp, sizeof(temp), "%d", source);
-        strcat(dest, temp);
-    }
-    else
-        snprintf(dest, 4, "%d", source);
+    snprintf(dest, 4, "%03d", source);
 }
 
 std::string time_now_to_string()

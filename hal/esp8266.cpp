@@ -228,23 +228,3 @@ int esp8266_config(int fd)
     LOG_INFO("esp8266", "ESP8266 configured as AP mode");
     return 0;
 }
-
-/**
- * @brief 获取ESP8266模块信息（预留接口）
- *
- * @return 当前固定返回0，待后续实现
- */
-int getespinfo()
-{
-    return 0;
-}
-
-/**
- * @brief 获取ESP8266模块连接状态（预留接口）
- *
- * @return 当前固定返回0，待后续实现
- */
-int getespsta()
-{
-    return 0;
-}
