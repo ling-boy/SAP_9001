@@ -179,6 +179,7 @@ void* GET_GPS(void* arg)
             flag = process_gps(buf, lat, sizeof(lat), f_lat, sizeof(f_lat), lon, sizeof(lon), f_lon, sizeof(f_lon));
             if (-1 == flag)
             {
+                // GPS 解析失败（可能是无效定位或格式错误），继续读取
                 continue;
             }
             else {
