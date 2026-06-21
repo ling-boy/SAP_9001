@@ -40,7 +40,10 @@
 #include "infra/config.h"
 #include "core/device_context.h"
 
-#define watchPathName CFG_STR("watchdog", "pid_file", "/home/root/myWatch.txt").c_str()
+// 使用内联函数替代宏，避免 .c_str() 悬空指针风险
+static std::string getWatchPath() {
+    return CFG_STR("watchdog", "pid_file", "/home/root/myWatch.txt");
+}
 extern const int softdogTimeout = 30;
 
 /* 所有全局状态已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance() 访问 */
@@ -116,7 +119,7 @@ int main()
 
     pid_t pt = getpid();
     std::string ptstr = std::to_string(pt);
-    g_fdWatch = open(watchPathName, O_WRONLY | O_TRUNC | O_CREAT, 0644);
+    g_fdWatch = open(getWatchPath().c_str(), O_WRONLY | O_TRUNC | O_CREAT, 0644);
     if (g_fdWatch < 0) LOG_ERROR("main", "open watch file failed: %s", strerror(errno));
     if (g_fdWatch >= 0) {
         int ret = write(g_fdWatch, ptstr.c_str(), ptstr.length());
@@ -150,7 +153,7 @@ int main()
         system("killall wpa_supplicant");
         sleep(1);
         system("killall udhcpc");
-        write_pid_file(watchPathName, "0");
+        write_pid_file(getWatchPath().c_str(), "0");
         LOG_INFO("main", "Process exiting");
         return 0;
     }
@@ -177,7 +180,7 @@ int main()
         if (regRet == (void*)-1) {
             LOG_ERROR("main", "Device registration failed");
             sleep(30);
-            write_pid_file(watchPathName, "0");
+            write_pid_file(getWatchPath().c_str(), "0");
             return 0;
         }
     }

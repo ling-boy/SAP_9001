@@ -51,7 +51,7 @@ public:
         std::string isr_mac;
         std::string current_time;
         std::string cpu_occupy;
-        char communicate_status[5] = "0000";
+        char communicate_status[6] = "0000";  // 增大到6，防止id=5越界
         int monitor_time = 4;
     };
 
@@ -202,6 +202,27 @@ public:
         pthread_mutex_unlock(&sensor_sync_.mtx);
     }
 
+    /**
+     * @brief 线程安全地设置设备标识
+     * @details 防止多线程并发读写 std::string 导致未定义行为
+     */
+    void setIdentityId(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.id = val; }
+    void setIdentityNetId(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.net_id = val; }
+    void setIdentityMac(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.mac = val; }
+    void setIdentityBtMac(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.bt_mac = val; }
+    void setIdentityIsrMac(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.isr_mac = val; }
+    void setIdentityCurrentTime(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.current_time = val; }
+    void setIdentityCpuOccupy(const std::string& val) { std::lock_guard<std::mutex> lock(identity_mtx_); identity_.cpu_occupy = val; }
+
+    /**
+     * @brief 线程安全地获取设备标识
+     */
+    std::string getIdentityId() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.id; }
+    std::string getIdentityNetId() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.net_id; }
+    std::string getIdentityMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.mac; }
+    std::string getIdentityIsrMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.isr_mac; }
+    std::string getIdentityCurrentTime() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.current_time; }
+
     // 禁止拷贝
     DeviceContext(const DeviceContext&) = delete;
     DeviceContext& operator=(const DeviceContext&) = delete;
@@ -210,6 +231,7 @@ private:
     DeviceContext() = default;
 
     DeviceIdentity identity_;
+    mutable std::mutex identity_mtx_;  // 保护 DeviceIdentity 的并发访问
     CommFds fds_;
     SensorSync sensor_sync_;
     MessageQueues queues_;

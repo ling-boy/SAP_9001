@@ -108,7 +108,13 @@ void* send_mess(void* arg)
                 if (ret == 0) {
                     LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<ISR Quit<<<<<<<<<<<<<<");
                     LOG_ERROR("transmit", "%s", "<<<<<<<<<<<<<SAP Will reConnect<<<<<<<<<<<<<<");
-                    return 0;
+                    // 触发重连而不是退出线程
+                    int activeId = ctx.commManager().getSuccessId();
+                    if (activeId >= 0) {
+                        ctx.commManager().reinit(activeId, 0);
+                    }
+                    sleep(2);
+                    continue;
                 }
                 {
                     std::string recv_message(RX_buf, RX_buf + ret);
@@ -129,22 +135,23 @@ void* send_mess(void* arg)
                             ctx.sensorSync().ship_data_ready = 1;
                             pthread_mutex_unlock(&ctx.sensorSync().mtx);
                             pthread_cond_broadcast(&ctx.sensorSync().cond);
-                            pthread_mutex_lock(&ctx.sensorSync().mtx);
+                            // 使用 offline_mtx 保护 offline_cache 访问
+                            pthread_mutex_lock(&ctx.queues().offline_mtx);
                             while (!ctx.queues().offline_cache.empty()) {
                                 flag = false;
                                 LOG_INFO("transmit", "Offline cache remaining: %zu", ctx.queues().offline_cache.size());
                                 std::string str = ctx.queues().offline_cache.front();
                                 ctx.queues().offline_cache.pop();
-                                pthread_mutex_unlock(&ctx.sensorSync().mtx);
+                                pthread_mutex_unlock(&ctx.queues().offline_mtx);
                                 ret = write_full(deviceFd, str.c_str(), str.size());
                                 if (ret < 0)
                                 {
                                     LOG_ERROR("transmit", "TransFd = %d", deviceFd);
                                     LOG_ERROR("transmit", "data_packet = %s", str.c_str());
                                     LOG_ERROR("transmit", "Trans error(deviceFd): %s", strerror(errno));
-                                    pthread_mutex_lock(&ctx.sensorSync().mtx);
+                                    pthread_mutex_lock(&ctx.queues().offline_mtx);
                                     ctx.queues().offline_cache.push(str);
-                                    pthread_mutex_unlock(&ctx.sensorSync().mtx);
+                                    pthread_mutex_unlock(&ctx.queues().offline_mtx);
                                 }
                                 else
                                 {
@@ -159,9 +166,9 @@ void* send_mess(void* arg)
                                 }
                                 g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
                                 g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
-                                pthread_mutex_lock(&ctx.sensorSync().mtx);
+                                pthread_mutex_lock(&ctx.queues().offline_mtx);
                             }
-                            pthread_mutex_unlock(&ctx.sensorSync().mtx);
+                            pthread_mutex_unlock(&ctx.queues().offline_mtx);
                             if (flag == false) {
                                 flag = true;
                                 continue;

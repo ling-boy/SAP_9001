@@ -65,21 +65,25 @@ int connect_nonb(int sockfd, const struct sockaddr* saptr, socklen_t salen, int 
 
     if ((n = select(sockfd + 1, &rset, &wset, NULL, nsec ? &tval : NULL)) == 0) {
         errno = ETIMEDOUT;
+        fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
         return -1;
     }
     else if (n == -1) {
         LOG_ERROR("dev_init", "select: %s", strerror(errno));
+        fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
         return -1;
     }
 
     if (FD_ISSET(sockfd, &rset) || FD_ISSET(sockfd, &wset)) {
         len = sizeof(error);
         if (getsockopt(sockfd, SOL_SOCKET, SO_ERROR, &error, &len) < 0) {
+            fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
             return -1;
         }
     }
     else {
         LOG_ERROR("dev_init", "%s", "select error: socket not set");
+        fcntl(sockfd, F_SETFL, flags);  // 恢复 socket flags
         return -1;
     }
 

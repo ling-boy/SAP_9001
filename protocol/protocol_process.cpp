@@ -10,7 +10,10 @@
 // logger.h must be included AFTER all other headers to override syslog.h LOG_INFO
 #include "infra/logger.h"
 
-#define STOREFILEPATHNAME       CFG_STR("data", "store_file", "/home/root/storefile.txt").c_str()
+// 使用内联函数替代宏，避免 .c_str() 悬空指针风险
+static std::string getStoreFilePath() {
+    return CFG_STR("data", "store_file", "/home/root/storefile.txt");
+}
 
 /** @brief 全局停止标志位，由信号处理器设置，主循环中检测 */
 extern volatile sig_atomic_t g_stop_flag;
@@ -197,7 +200,7 @@ void packet20(std::string& strPacket){
  * @brief 将未发送的数据包队列写入本地文件进行持久化存储
  */
 int dataTofile(MessageQueue<std::string>& buffer){
-    int fd = open(STOREFILEPATHNAME, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
+    int fd = open(getStoreFilePath().c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
     if(fd < 0) { LOG_ERROR("protocol", "dataTofile open failed: %s", strerror(errno)); return -1; }
     int count = 0;
     std::string item;
@@ -216,7 +219,7 @@ int drainAndPersist(MessageQueue<std::string>& buffer){
     std::vector<std::string> items;
     buffer.popAll(items);
     if(items.empty()) return 0;
-    int fd = open(STOREFILEPATHNAME, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
+    int fd = open(getStoreFilePath().c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
     if(fd < 0) { LOG_ERROR("protocol", "drainAndPersist open failed: %s", strerror(errno)); return -1; }
     int count = 0;
     for(const auto& item : items){
@@ -233,7 +236,7 @@ int drainAndPersistUnsafe(MessageQueue<std::string>& buffer){
     std::vector<std::string> items;
     buffer.drainUnsafe(items);
     if(items.empty()) return 0;
-    int fd = open(STOREFILEPATHNAME, O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
+    int fd = open(getStoreFilePath().c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
     if(fd < 0) { perror("drainAndPersist open"); return -1; }
     int count = 0;
     for(const auto& item : items){
@@ -250,9 +253,9 @@ int drainAndPersistUnsafe(MessageQueue<std::string>& buffer){
  * @brief 从本地文件读取未发送的数据包，并将06包转为21重发包
  */
 int readFromFile(std::queue<std::string>& recvQueue){
-    FILE *fs = fopen(STOREFILEPATHNAME, "r");
+    FILE *fs = fopen(getStoreFilePath().c_str(), "r");
     if (fs == NULL) {
-        LOG_ERROR("protocol", "fopen %s failed: %s", STOREFILEPATHNAME, strerror(errno));
+        LOG_ERROR("protocol", "fopen %s failed: %s", getStoreFilePath().c_str(), strerror(errno));
         return -1;
     }
     char* buffer = NULL;
@@ -291,7 +294,7 @@ int readFromFile(std::queue<std::string>& recvQueue){
         free(buffer);
     }
     fclose(fs);
-    int fd = open(STOREFILEPATHNAME, O_WRONLY | O_TRUNC);
+    int fd = open(getStoreFilePath().c_str(), O_WRONLY | O_TRUNC);
     if(fd < 0) LOG_ERROR("protocol", "truncate storefile failed: %s", strerror(errno));
     else close(fd);
     return count;

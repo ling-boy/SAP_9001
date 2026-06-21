@@ -33,15 +33,17 @@ target_link_directories(modbus_9001 PUBLIC
     "${CMAKE_CURRENT_SOURCE_DIR}/libmodbus/lib" # libmodbus 的库文件
 )
 
-# 7. 链接所需的库
-target_link_libraries(modbus_9001 
-    modbus    # 对应 libmodbus.so 或 libmodbus.a
+# 7. 链接所需的库（使用静态库避免 glibc 版本问题）
+target_link_libraries(modbus_9001
+    ${CMAKE_CURRENT_SOURCE_DIR}/libmodbus/lib/libmodbus.a  # 静态链接 libmodbus
     pthread   # 链接多线程库
-    m         # 链接数学库 (如果需要，例如使用了 pow)
+    m         # 链接数学库
 )
 
-# VVVV 在这里添加下面这行 VVVV
-#target_link_options(modbus_9001 PRIVATE -static-libstdc++)
+# 8. 完全静态链接，避免目标设备 glibc 版本不兼容
+target_link_options(modbus_9001 PRIVATE
+    -static              # 完全静态链接（包括 libc, libm, libstdc++）
+)
 
 # 8. (可选) 添加一些编译选项
 target_compile_options(modbus_9001 PRIVATE -Wall -Wextra)

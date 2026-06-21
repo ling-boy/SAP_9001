@@ -40,7 +40,9 @@ public:
      */
     int nextDelay() {
         // 计算指数退避：base * 2^count
-        int delay = base_ms_ * (1 << retry_count_);
+        // 限制 retry_count_ 上限避免整数溢出（1 << 31 是 UB）
+        int shift = std::min(retry_count_, 30);
+        int delay = base_ms_ * (1 << shift);
         // 限制最大延迟
         delay = std::min(delay, max_ms_);
         // 增加重试计数
