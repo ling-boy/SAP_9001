@@ -80,8 +80,9 @@ void* GET_GPS(void* arg)
 {
     (void)arg;
     LOG_INFO("gps", "Start GPS thread");
+    // 启动 GPS 脚本，输出重定向到 /dev/null 以抑制原始 NMEA 输出
     std::string gps_script = CFG_STR("paths", "gps_script", "/home/root/gps_test.sh");
-    std::string gps_cmd = gps_script + " &";
+    std::string gps_cmd = gps_script + " > /dev/null 2>&1 &";
     if (system(gps_cmd.c_str()) < 0) {
         LOG_WARN("gps", "system() failed to launch gps_test.sh");
     }
