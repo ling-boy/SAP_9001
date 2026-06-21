@@ -270,24 +270,24 @@ int dev_init()
                 case 2: ctx.commManager().callbackRgist(id, 0, wifi_reinit); break;
                 case 3: ctx.commManager().callbackRgist(id, 0, bt_reinit); break;
                 case 4: ctx.commManager().callbackRgist(id, 0, lan_reinit); break;
-                case 5: break;  // LAN Server 不需要 reinit
             }
             ctx.fds().device_id.push_back(fd);
+
+            // 仅客户端设备设置 communicate_status
+            // 索引：LoRa=0, WiFi=1, BT=2, LAN=3
+            int status_idx = id - 1;
+            if (status_idx >= 0 && status_idx <= 3) {
+                ctx.setCommunicateStatus(status_idx, '1');
+            }
         }
 
-        // 更新对应的 fd 和 communicate_status
+        // 更新对应的 fd
         switch (id) {
             case 1: ctx.fds().lora = fd; break;
             case 2: ctx.fds().wifi = fd; ctx.fds().flag_wifi = 1; break;
             case 3: ctx.fds().bt = fd; break;
             case 4: ctx.fds().lan = fd; break;
             case 5: ctx.fds().lan_server = fd; break;
-        }
-
-        // communicate_status 索引：LoRa=0, WiFi=1, BT=2, LAN=3
-        int status_idx = id - 1;
-        if (status_idx >= 0 && status_idx <= 5) {
-            ctx.setCommunicateStatus(status_idx, '1');
         }
 
         LOG_INFO("dev_init", "Init success: %s, fd=%d", strategy->typeName().c_str(), fd);

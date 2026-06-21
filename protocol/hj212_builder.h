@@ -20,6 +20,7 @@
 #include "protocol/protocol_process.h"
 #include "infra/get.h"
 #include "infra/logger.h"
+#include "hal/gps.h"
 
 namespace sap {
 
@@ -120,7 +121,7 @@ public:
         isr_mac_ = ctx.getIdentityIsrMac();
         comm_status_ = ctx.getCommunicateStatus();
         cpu_mem_ = get_cpuOccupy();
-        gps_ = "N2932E10636";  // 默认 GPS，实际应从 GPS 模块获取
+        gps_ = gps_get_location();
 
         return *this;
     }
@@ -136,8 +137,8 @@ public:
         int activeId = ctx.getActiveDeviceId();
         std::string communicateType = (activeId >= 0) ? std::to_string(activeId) : "0";
 
-        // 计算长度
-        int length = data_.length() + 54;
+        // 计算长度（不含 gps_ 字段，GPS 数据由传感器数据段携带）
+        int length = data_.length() + 43;
         std::string len_str = "";
         change(length, len_str);
 
@@ -157,10 +158,10 @@ public:
 
         // 组装协议包
         int needed = snprintf(packet, 2048,
-            "$%s%s%s%s00%s%s%s%s%s%s%s%s@",
+            "$%s%s%s%s00%s%s%s%s%s%s%s@",
             command_.c_str(), communicateType.c_str(), device_id_.c_str(), net_id_.c_str(),
             len_str.c_str(), isr_mac_.c_str(), mac_.c_str(),
-            port_info_.c_str(), gps_.c_str(), cpu_mem_.c_str(),
+            port_info_.c_str(), cpu_mem_.c_str(),
             comm_status_.c_str(), data_.c_str());
 
         if (needed < 0) {

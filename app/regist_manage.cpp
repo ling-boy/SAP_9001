@@ -14,6 +14,10 @@ using sap::write_full;
 
 /**
  * @brief 硬件清理：关闭LED、关闭12V电源、同步RTC
+ * @warning **命令注入风险**：本函数使用 system() 执行 shell 命令。
+ *          当前所有命令均为硬编码常量，不存在注入风险。
+ *          若未来引入外部输入拼接命令，需改用 execve() 等安全接口。
+ *          参考：CWE-78 (OS Command Injection)
  */
 static void hardware_cleanup()
 {
@@ -142,7 +146,7 @@ void* device_regist(void* arg)
                             state = RegistState::SendRegister;
                             break;
                         }
-                        // 连续收到4个完整包（select_num从1递增到5），信道空闲
+                        // 连续收到4个完整数据包后 select_num 达到 5，判定信道空闲
                         if (RX_buf[0] == '$' && RX_buf[ret - 1] == '@' && select_num == 5) {
                             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                             state = RegistState::SendRegister;
@@ -166,11 +170,19 @@ void* device_regist(void* arg)
             break;
 
         case RegistState::SendRegister:
-            sleep(ctx.identity().monitor_time / 4);
-            regist_message = std::string("$") + "01" + std::to_string(device_id) +
-                ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0026" +
-                ctx.getIdentityMac() + ctx.getCommunicateStatus() +
-                "010" + gps_get_location() + ctx.getIdentityCpuOccupy() + "@";
+            sleep(ctx.getIdentityMonitorTime() / 4);
+            {
+                // 动态计算数据段长度
+                std::string data_part = ctx.getIdentityMac() + ctx.getCommunicateStatus() +
+                    "010" + gps_get_location() + ctx.getIdentityCpuOccupy() + "@";
+                int length = data_part.length() + 14;  // 固定字段：$01 + device_id + id + net_id + 00 = 14字节
+                char len_buf[5];
+                snprintf(len_buf, sizeof(len_buf), "%04X", length);
+
+                regist_message = std::string("$") + "01" + std::to_string(device_id) +
+                    ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + len_buf +
+                    data_part;
+            }
 
             ret = write_full(fd, regist_message.c_str(), regist_message.size());
             if (ret < 0) {
@@ -190,7 +202,7 @@ void* device_regist(void* arg)
             while (retry-- > 0 && !received_17) {
                 FD_ZERO(&fdset);
                 FD_SET(fd, &fdset);
-                tv.tv_sec = ctx.identity().monitor_time;
+                tv.tv_sec = ctx.getIdentityMonitorTime();
                 tv.tv_usec = 0;
                 g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
 
@@ -208,10 +220,10 @@ void* device_regist(void* arg)
                         LOG_WARN("regist", "regist_recv_message too short: %zu", regist_recv_message.length());
                         continue;
                     }
-                    std::string recv_protocal = regist_recv_message.substr(1, 2);
+                    std::string recv_protocol = regist_recv_message.substr(1, 2);
                     // 收到17协议，提取ISR的MAC地址、设备ID和网络ID
                     // 注意：此处假设17协议格式为固定偏移，需与ISR端协议文档对照确认
-                    if (recv_protocal == REQ_SEND_INFO) {
+                    if (recv_protocol == REQ_SEND_INFO) {
                         std::string recv_mac = regist_recv_message.substr(16, 16);
                         if (recv_mac == ctx.getIdentityMac()) {
                             ctx.setIdentityIsrMac(regist_recv_message.substr(32, 16));
@@ -259,7 +271,7 @@ void* device_regist(void* arg)
                 g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                 FD_ZERO(&fdset);
                 FD_SET(fd, &fdset);
-                tv.tv_sec = ctx.identity().monitor_time;
+                tv.tv_sec = ctx.getIdentityMonitorTime();
                 tv.tv_usec = 0;
                 ret = select(fd + 1, &fdset, NULL, NULL, &tv);
                 listen_num--;
@@ -277,10 +289,10 @@ void* device_regist(void* arg)
                         LOG_WARN("regist", "time_recvmessage too short: %zu", time_recvmessage.length());
                         continue;
                     }
-                    std::string recv_protocal = time_recvmessage.substr(1, 2);
+                    std::string recv_protocol = time_recvmessage.substr(1, 2);
                     std::string recv_mac = time_recvmessage.substr(16, 16);
                     // 收到20协议时间戳，设置系统时间并使能设备
-                    if (recv_protocal == TIME_SEND && recv_mac == ctx.getIdentityMac()) {
+                    if (recv_protocol == TIME_SEND && recv_mac == ctx.getIdentityMac()) {
                         ctx.setIdentityCurrentTime(time_recvmessage.substr(32, 17));
                         struct tm tm_set;
                         memset(&tm_set, 0, sizeof(tm_set));

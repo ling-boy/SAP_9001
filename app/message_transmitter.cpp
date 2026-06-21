@@ -131,8 +131,8 @@ void* send_mess(void* arg)
                     std::string recv_message(RX_buf, RX_buf + ret);
                     LOG_INFO("transmit", "Message From The Gateway: %s", recv_message.c_str());
                     if (recv_message.length() < 38) continue;
-                    std::string recv_protocal = recv_message.substr(1, 2);
-                    if (recv_protocal == REQ_DATA)
+                    std::string recv_protocol = recv_message.substr(1, 2);
+                    if (recv_protocol == REQ_DATA)
                     {
                         std::string recv_mac = recv_message.substr(22, 16);
                         if (recv_mac == ctx.getIdentityMac())
@@ -212,7 +212,7 @@ void* send_mess(void* arg)
                             }
                         }
                     }
-                    else if (recv_protocal == TIME_SEND) {
+                    else if (recv_protocol == TIME_SEND) {
                         count = 0;
                         g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                         packet20(recv_message);

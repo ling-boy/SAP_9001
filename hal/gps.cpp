@@ -37,7 +37,7 @@ static int process_gps(char* line, char* lat, int lat_size, char* flag_lat, int 
     token = strtok(line, ",");
     if (token == NULL) return -1;
     /* 跳过时间字段，检查状态字段：V=无效定位 */
-    char* time_field = strtok(NULL, ",");
+    (void)strtok(NULL, ",");  // 跳过时间字段
     char* status = strtok(NULL, ",");
     if (status != NULL && status[0] == 'V')
     {

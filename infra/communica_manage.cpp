@@ -146,6 +146,9 @@ bool communicaManage::deletecommunicateNode(int id)
 /**
  * @brief 重新初始化指定通信设备
  * @details 使用熔断器保护，防止连续失败时无限重试
+ * @warning 此方法持有 recursive_mutex 锁期间执行重初始化回调，
+ *          回调中可能包含 system()、sleep() 等阻塞操作（WiFi 重初始化累计 15+ 秒）。
+ *          建议在单独线程中调用此方法，避免阻塞其他线程的 commManager 操作。
  */
 bool communicaManage::reinit(int id, int para)
 {

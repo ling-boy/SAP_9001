@@ -138,11 +138,6 @@ int set_opt1(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop)
 int set_opt(int fd, int nSpeed, int nBits, uint8_t nEvent, int nStop, int flag)
 {
     struct termios newtio;
-    if (tcgetattr(fd, &newtio) != 0)
-    {
-        LOG_ERROR("usbctl", "tcgetattr failed: %s", strerror(errno));
-        return -1;
-    }
     memset(&newtio, 0, sizeof(newtio));
 
     newtio.c_cflag |= (CLOCAL | CREAD);

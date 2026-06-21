@@ -154,7 +154,7 @@ int readFromFile(std::queue<std::string>& recvQueue){
     FILE *fs = fopen(getStoreFilePath().c_str(), "r");
     if (fs == NULL) {
         LOG_ERROR("protocol", "fopen %s failed: %s", getStoreFilePath().c_str(), strerror(errno));
-        return -1;
+        return 0;
     }
     char* buffer = NULL;
     size_t num = 0;

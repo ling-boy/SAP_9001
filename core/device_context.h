@@ -261,6 +261,11 @@ public:
     std::string getIdentityCurrentTime() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.current_time; }
     std::string getIdentityCpuOccupy() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.cpu_occupy; }
 
+    /**
+     * @brief 线程安全地获取 monitor_time
+     */
+    int getIdentityMonitorTime() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.monitor_time; }
+
     // 禁止拷贝
     DeviceContext(const DeviceContext&) = delete;
     DeviceContext& operator=(const DeviceContext&) = delete;

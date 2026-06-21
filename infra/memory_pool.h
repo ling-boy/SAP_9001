@@ -25,6 +25,10 @@ namespace sap {
  * @brief 固定大小内存池
  * @tparam T        对象类型
  * @tparam PoolSize 池中预分配的块数量
+ *
+ * @warning **仅限单线程使用**：本类的 allocate()/deallocate() 等方法均无锁保护，
+ *          多线程并发调用会导致数据竞争和未定义行为。
+ *          如需多线程访问，调用方应自行在外层加锁保护。
  */
 template<typename T, size_t PoolSize = 16>
 class MemoryPool {
