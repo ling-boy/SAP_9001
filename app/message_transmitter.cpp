@@ -132,7 +132,7 @@ void* send_mess(void* arg)
                     if (recv_protocal == REQ_DATA)
                     {
                         std::string recv_mac = recv_message.substr(22, 16);
-                        if (recv_mac == ctx.identity().mac)
+                        if (recv_mac == ctx.getIdentityMac())
                         {
                             count++;
                             LOG_INFO("transmit", "Message counter: %d", count);

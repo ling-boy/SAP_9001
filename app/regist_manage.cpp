@@ -167,8 +167,8 @@ void* device_regist(void* arg)
             sleep(ctx.identity().monitor_time / 4);
             regist_message = std::string("$") + "01" + std::to_string(device_id) +
                 ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0026" +
-                ctx.getIdentityMac() + ctx.identity().communicate_status +
-                "010" + gps_get_location() + ctx.identity().cpu_occupy + "@";
+                ctx.getIdentityMac() + ctx.getCommunicateStatus() +
+                "010" + gps_get_location() + ctx.getIdentityCpuOccupy() + "@";
 
             ret = write_full(fd, regist_message.c_str(), regist_message.size());
             if (ret < 0) {

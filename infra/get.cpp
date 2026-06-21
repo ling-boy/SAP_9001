@@ -124,39 +124,43 @@ std::string cal_cpuoccupy(CPU_OCCUPY *o, CPU_OCCUPY *n)
 /**
  * @brief 获取CPU和内存使用率的组合字符串
  * @details 线程安全版本，使用互斥锁保护静态变量
+ *          优化：先检查缓存（持锁），采样时释放锁避免阻塞其他线程
  */
 std::string get_cpuOccupy(){
     static std::string cached_result;
     static time_t last_sample_time = 0;
     static std::mutex cpu_mtx;
 
-    std::lock_guard<std::mutex> lock(cpu_mtx);
-    time_t now = time(NULL);
-
-    /* 30秒缓存：避免频繁采样阻塞100ms */
-    if (!cached_result.empty() && (now - last_sample_time) < 30) {
-        return cached_result;
+    // 第一阶段：持锁检查缓存
+    {
+        std::lock_guard<std::mutex> lock(cpu_mtx);
+        time_t now = time(NULL);
+        if (!cached_result.empty() && (now - last_sample_time) < 30) {
+            return cached_result;
+        }
     }
 
+    // 第二阶段：释放锁后执行采样（避免持锁阻塞100ms）
     MEM_OCCUPY mem_stat;
     CPU_OCCUPY cpu_stat1;
     CPU_OCCUPY cpu_stat2;
-    std::string mem;
-    std::string cpu;
-    std::string cpu_mem;
     get_memoccupy(&mem_stat);
-    mem = cal_memoccupy(&mem_stat);
+    std::string mem = cal_memoccupy(&mem_stat);
 
     if (get_cpuoccupy((CPU_OCCUPY *)&cpu_stat1) < 0)
         return "0101";
-    /* 采样间隔100ms，用于计算CPU使用率差值 */
     usleep(100000);
     if (get_cpuoccupy((CPU_OCCUPY *)&cpu_stat2) < 0)
         return "0101";
-    cpu = cal_cpuoccupy(&cpu_stat1, &cpu_stat2);
-    cpu_mem = cpu + mem;
+    std::string cpu = cal_cpuoccupy(&cpu_stat1, &cpu_stat2);
+    std::string cpu_mem = cpu + mem;
 
-    cached_result = cpu_mem;
-    last_sample_time = now;
+    // 第三阶段：持锁更新缓存
+    {
+        std::lock_guard<std::mutex> lock(cpu_mtx);
+        cached_result = cpu_mem;
+        last_sample_time = time(NULL);
+    }
+
     return cpu_mem;
 }

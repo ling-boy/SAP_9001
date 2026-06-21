@@ -163,6 +163,16 @@ void SensorDriver::run()
     }
     LOG_INFO("sensor", "%s", "sensor connected successfully");
 
+    // 注册清理函数，确保 modbus_t 在 pthread_cancel 时被释放
+    struct ModbusCleanup {
+        static void cleanup(void* arg) {
+            modbus_t* ctx = static_cast<modbus_t*>(arg);
+            modbus_close(ctx);
+            modbus_free(ctx);
+        }
+    };
+    pthread_cleanup_push(ModbusCleanup::cleanup, ctx);
+
     std::vector<double> sensor_values(sensor_count, -999);
     size_t index_flag = 0;
 
@@ -260,6 +270,9 @@ void SensorDriver::run()
 
         index_flag = (index_flag + 1) % sensor_count;
     }
+
+    // 执行清理（关闭 modbus 连接并释放资源）
+    pthread_cleanup_pop(1);
 }
 
 

@@ -244,6 +244,7 @@ public:
     std::string getIdentityMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.mac; }
     std::string getIdentityIsrMac() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.isr_mac; }
     std::string getIdentityCurrentTime() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.current_time; }
+    std::string getIdentityCpuOccupy() const { std::lock_guard<std::mutex> lock(identity_mtx_); return identity_.cpu_occupy; }
 
     // 禁止拷贝
     DeviceContext(const DeviceContext&) = delete;
