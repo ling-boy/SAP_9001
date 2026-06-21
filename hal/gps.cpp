@@ -120,12 +120,22 @@ void* GET_GPS(void* arg)
         char in;
         int i = 0;
         int flag_read = 0;
-        while (1)
+        bool gps_running = true;
+        while (gps_running)
         {
             while (1)
             {
                 ssize_t n = read(fd, &in, 1);
-                if (n <= 0) break;
+                if (n <= 0) {
+                    // 设备关闭或错误，退出外层循环
+                    if (n == 0) {
+                        LOG_WARN("gps", "%s", "GPS device closed");
+                    } else {
+                        LOG_ERROR("gps", "GPS read error: %s", strerror(errno));
+                    }
+                    gps_running = false;
+                    break;
+                }
                 if (in != '$')
                 {
                     if (0 == flag_read) continue;

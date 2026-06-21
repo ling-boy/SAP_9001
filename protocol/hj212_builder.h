@@ -17,6 +17,7 @@
 #include <string>
 #include "core/device_context.h"
 #include "protocol/hj212.h"
+#include "protocol/protocol_process.h"
 #include "infra/get.h"
 #include "infra/logger.h"
 
@@ -112,13 +113,12 @@ public:
      */
     HJ212PacketBuilder& fromContext() {
         auto& ctx = DeviceContext::instance();
-        auto& id = ctx.identity();
-
-        device_id_ = id.id;
-        net_id_ = id.net_id;
-        mac_ = id.mac;
-        isr_mac_ = id.isr_mac;
-        comm_status_ = id.communicate_status;
+        // 使用线程安全的 getter 方法
+        device_id_ = ctx.getIdentityId();
+        net_id_ = ctx.getIdentityNetId();
+        mac_ = ctx.getIdentityMac();
+        isr_mac_ = ctx.getIdentityIsrMac();
+        comm_status_ = ctx.getCommunicateStatus();
         cpu_mem_ = get_cpuOccupy();
         gps_ = "N2932E10636";  // 默认 GPS，实际应从 GPS 模块获取
 
@@ -132,8 +132,9 @@ public:
     std::string build() const {
         auto& ctx = DeviceContext::instance();
 
-        // 获取通信类型
-        std::string communicateType = std::to_string(ctx.getActiveDeviceId());
+        // 获取通信类型（处理负数设备ID）
+        int activeId = ctx.getActiveDeviceId();
+        std::string communicateType = (activeId >= 0) ? std::to_string(activeId) : "0";
 
         // 计算长度
         int length = data_.length() + 54;
@@ -191,28 +192,7 @@ private:
     std::string data_;
     std::string port_info_;
 
-    /**
-     * @brief 十进制转十六进制字符串
-     */
-    static void change(long long int num, std::string& str) {
-        if (num < 16) {
-            str += switch10_16(num);
-            return;
-        }
-        change(num / 16, str);
-        str += switch10_16(num % 16);
-    }
-
-    static std::string switch10_16(int num) {
-        switch(num) {
-            case 0: return "0"; case 1: return "1"; case 2: return "2";
-            case 3: return "3"; case 4: return "4"; case 5: return "5";
-            case 6: return "6"; case 7: return "7"; case 8: return "8";
-            case 9: return "9"; case 10: return "A"; case 11: return "B";
-            case 12: return "C"; case 13: return "D"; case 14: return "E";
-            case 15: return "F"; default: return "0";
-        }
-    }
+    // 使用 protocol_process.h 中的全局 change() 和 switch10_16() 函数
 };
 
 } // namespace sap

@@ -184,7 +184,7 @@ int bt_reinit(int old_fd)
     ctx.fds().bt = bluetooth_open(ctx.identity().bt_mac);
     if (-1 == ctx.fds().bt)
     {
-        ctx.identity().bt_mac = "";
+        ctx.setIdentityBtMac("");
         LOG_ERROR("dev_init", "%s", "-> No blue_tooth device");
         return -1;
     }
@@ -295,7 +295,7 @@ int dev_init()
             return nullptr;
         }());
     if (btStrategy && btStrategy->isConnected()) {
-        ctx.identity().bt_mac = btStrategy->getDeviceMac();
+        ctx.setIdentityBtMac(btStrategy->getDeviceMac());
     }
 
     if (ctx.fds().device_id.empty()) {

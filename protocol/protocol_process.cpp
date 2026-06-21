@@ -60,19 +60,6 @@ int change(long long int num, std::string& str)
 }
 
 /**
- * @brief 将整数转换为带一位小数的浮点数
- */
-float int2pString(int num)
-{
-    int a = num % 10;
-    int b = num / 10;
-    char buf[32];
-    snprintf(buf, sizeof(buf), "%d.%d", b, a);
-    float f = atof(buf);
-    return f;
-}
-
-/**
  * @brief 封装私有协议06包（使用 HJ212PacketBuilder 建造者模式）
  */
 std::string packet06(std::string strT, std::string portInfo)
@@ -114,25 +101,6 @@ void packet20(std::string& strPacket){
         settimeofday(&tv_set, NULL);
         LOG_INFO("protocol", "Update time success: %s", current_time.c_str());
     }
-}
-
-/**
- * @brief 将未发送的数据包队列写入本地文件进行持久化存储
- */
-int dataTofile(MessageQueue<std::string>& buffer){
-    int fd = open(getStoreFilePath().c_str(), O_WRONLY|O_CREAT|O_APPEND, S_IRUSR | S_IWUSR);
-    if(fd < 0) { LOG_ERROR("protocol", "dataTofile open failed: %s", strerror(errno)); return -1; }
-    int count = 0;
-    std::string item;
-    while(buffer.tryPop(item)){
-        const char* buff = item.c_str();
-        int num = write(fd, buff, strlen(buff));
-        if(num <= 0) { LOG_ERROR("protocol", "dataTofile write failed: %s", strerror(errno)); continue; }
-        if (write(fd, "\n", 1) < 0) LOG_ERROR("protocol", "%s", "dataTofile write newline failed");
-        count ++;
-    }
-    close(fd);
-    return count;
 }
 
 int drainAndPersist(MessageQueue<std::string>& buffer){
@@ -239,11 +207,12 @@ std::string buildHeartbeat()
     // 获取队列深度
     int queue_depth = ctx.queues().transmit.size();
 
-    // 构建数据段：CPU使用率(2位) + 内存空闲率(2位) + 通信状态(4位) + 队列深度(4位)
-    char data_segment[16];
+    // 构建数据段：CPU使用率(2位) + 内存空闲率(2位) + 通信状态(4位) + 队列深度(4位) + GPS状态(1位)
+    char data_segment[20];
     std::string comm_status = ctx.getCommunicateStatus();
-    snprintf(data_segment, sizeof(data_segment), "%s%s%04d",
-             cpu_mem.c_str(), comm_status.c_str(), queue_depth);
+    int gps_ok = ctx.fds().gps_failed ? 0 : 1;
+    snprintf(data_segment, sizeof(data_segment), "%s%s%04d%d",
+             cpu_mem.c_str(), comm_status.c_str(), queue_depth, gps_ok);
 
     // 计算长度：数据段长度 + 固定字段长度(设备ID + 网络ID + 通信类型 = 2+4+1 = 7)
     int length = strlen(data_segment) + 7;

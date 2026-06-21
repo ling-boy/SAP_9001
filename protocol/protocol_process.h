@@ -44,13 +44,6 @@ std::string switch10_16(int num);
 int change(long long int num, std::string& str);
 
 /**
- * @brief 将整数转换为带一位小数的浮点数
- * @param num 整数
- * @return 浮点数值
- */
-float int2pString(int num);
-
-/**
  * @brief 封装私有协议06包
  * @param strT     数据内容
  * @param portInfo 端口信息标识
@@ -63,13 +56,6 @@ std::string packet06(std::string strT, std::string portInfo);
  * @param strPacket 20协议数据包
  */
 void packet20(std::string& strPacket);
-
-/**
- * @brief 将未发送的数据包队列写入本地文件进行持久化存储
- * @param buffer 待写入的数据包队列
- * @return 成功返回0，失败返回-1
- */
-int dataTofile(MessageQueue<std::string>& buffer);
 
 /**
  * @brief 将队列中的所有数据包持久化到文件（用于信号处理等紧急场景）

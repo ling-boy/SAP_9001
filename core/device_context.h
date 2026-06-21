@@ -150,13 +150,6 @@ public:
     // ======================================================================
 
     /**
-     * @brief 获取第一个已注册成功设备的 fd
-     */
-    int getActiveFd() {
-        return comm_mgr_.getSuccessFd();
-    }
-
-    /**
      * @brief 获取第一个已注册成功设备的 ID
      */
     int getActiveDeviceId() {

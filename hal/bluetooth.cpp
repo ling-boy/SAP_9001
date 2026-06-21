@@ -146,7 +146,7 @@ int bluetooth_open(std::string &device_mac)
                             close(fd);
                             return -1;
                         }
-                        int retry_count = 30;
+                        int retry_count = 5;  // 减少重试次数，避免阻塞过久
                         while(retry_count > 0)
                         {
                             FD_ZERO(&fdset);

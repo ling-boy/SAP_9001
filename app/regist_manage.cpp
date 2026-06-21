@@ -140,7 +140,7 @@ void* device_regist(void* arg)
                             state = RegistState::SendRegister;
                             break;
                         }
-                        // 连续收到5个完整包，信道空闲
+                        // 连续收到4个完整包（select_num从1递增到5），信道空闲
                         if (RX_buf[0] == '$' && RX_buf[ret - 1] == '@' && select_num == 5) {
                             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                             state = RegistState::SendRegister;
