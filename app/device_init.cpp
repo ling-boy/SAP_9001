@@ -241,6 +241,8 @@ int lan_reinit(int old_fd)
         if (lan_fd_connect < 0)
         {
             LOG_ERROR("dev_init", "lan: connect: %s", strerror(errno));
+            close(ctx.fds().lan);
+            ctx.fds().lan = -1;
             return -1;
         }
         else

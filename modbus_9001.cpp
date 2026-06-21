@@ -44,7 +44,10 @@
 static std::string getWatchPath() {
     return CFG_STR("watchdog", "pid_file", "/home/root/myWatch.txt");
 }
-extern const int softdogTimeout = 30;
+// 从配置文件读取看门狗超时时间
+static int getSoftdogTimeout() {
+    return CFG_INT("watchdog", "timeout_sec", 30);
+}
 
 /* 所有全局状态已迁移至 DeviceContext 单例，通过 sap::DeviceContext::instance() 访问 */
 

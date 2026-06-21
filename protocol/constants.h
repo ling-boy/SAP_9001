@@ -30,4 +30,4 @@
 #define REQ_GATE_HEART          "FF"    ///< 网关心跳
 
 /** @brief 接收缓冲区大小（协议包最大长度） */
-#define RX_SIZE                 58
+#define RX_SIZE                 1024

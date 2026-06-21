@@ -106,7 +106,7 @@ std::string time_now_to_string()
     struct timeval tv;
     struct tm tm_buf;
     char timestamp_now[100];
-    char stringyear[12], stringmonth[3], stringday[3], stringhour[3], stringmin[3], stringsec[3], stringusec[4];
+    char stringyear[8], stringmonth[3], stringday[3], stringhour[3], stringmin[3], stringsec[3], stringusec[4];
 
     gettimeofday(&tv, NULL);
     if (localtime_r(&tv.tv_sec, &tm_buf) == NULL) {

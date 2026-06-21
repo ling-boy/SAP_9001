@@ -27,9 +27,14 @@ using sap::write_full;
 
 // 使用统一的协议常量定义
 #include "protocol/constants.h"
+#include "infra/config.h"
 
 /* 所有全局状态已迁移至 DeviceContext 单例 */
-extern const int softdogTimeout;
+
+// 从配置文件读取看门狗超时时间
+static int getSoftdogTimeout() {
+    return CFG_INT("watchdog", "timeout_sec", 30);
+}
 
 void* send_mess(void* arg)
 {
@@ -46,10 +51,10 @@ void* send_mess(void* arg)
     int count = 0;
     const char* const threadname = "trans_message";
     int wdt_id = -1;
-    wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, softdogTimeout);
+    wdt_id = g_CsoftwareWdt->RequestSoftwareWdtID(threadname, getSoftdogTimeout());
     bool flag = true;
-    int heartbeat_counter = 0;
-    const int HEARTBEAT_INTERVAL = 2;  // 每2次超时（约60秒）发送一次心跳
+    time_t last_heartbeat = time(NULL);
+    const int HEARTBEAT_INTERVAL_SEC = 60;  // 每60秒发送一次心跳
 
     // 指数退避：FD获取失败时使用，基础1秒，最大30秒
     sap::ExponentialBackoff fd_backoff(1000, 30000);
@@ -84,9 +89,8 @@ void* send_mess(void* arg)
             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
 
             // 发送心跳包
-            heartbeat_counter++;
-            if (heartbeat_counter >= HEARTBEAT_INTERVAL) {
-                heartbeat_counter = 0;
+            if (time(NULL) - last_heartbeat >= HEARTBEAT_INTERVAL_SEC) {
+                last_heartbeat = time(NULL);
                 std::string heartbeat = buildHeartbeat();
                 ret = write_full(deviceFd, heartbeat.c_str(), heartbeat.size());
                 if (ret < 0) {
@@ -142,7 +146,10 @@ void* send_mess(void* arg)
                             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
                             LOG_INFO("transmit", "%s", "thread of trans_message feed dog success");
                             ctx.notifySensorDataReady(true);   /* ship_data_ready = 1 */
-                            ctx.notifySensorDataReady(false);  /* gas_data_ready = 1 */
+                            // 仅在大气传感器线程存在时设置
+                            if (ctx.threads().get_sensor != 0) {
+                                ctx.notifySensorDataReady(false);  /* gas_data_ready = 1 */
+                            }
 
                             // 先取后发模式：在锁内取出所有数据，解锁后逐个发送
                             std::vector<std::string> pending_packets;

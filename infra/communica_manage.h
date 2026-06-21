@@ -17,8 +17,6 @@
 #include <functional>
 #include "infra/circuit_breaker.h"
 
-/** 通信设备最大支持数量 */
-#define communicatemax 4
 
 /**
  * @brief 通信设备信息结构体
