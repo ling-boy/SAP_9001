@@ -98,12 +98,12 @@ int protoc_17(std::string buff)
     {
 
         std::string recv_mac = buff.substr(16, 16);
-        if (recv_mac == ctx.identity().mac)
+        if (recv_mac == ctx.getIdentityMac())
         {
-            ctx.identity().isr_mac=buff.substr(32,16);
-            ctx.identity().id = buff.substr(48, 2);
-            ctx.identity().net_id = buff.substr(50, 4);
-            confirm_message = confirm_message + "$" + "02" + "1" + ctx.identity().id + ctx.identity().net_id + "00" + "0012" + ctx.identity().mac + ctx.identity().id + "@";
+            ctx.setIdentityIsrMac(buff.substr(32, 16));
+            ctx.setIdentityId(buff.substr(48, 2));
+            ctx.setIdentityNetId(buff.substr(50, 4));
+            confirm_message = confirm_message + "$" + "02" + "1" + ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0012" + ctx.getIdentityMac() + ctx.getIdentityId() + "@";
             ret = write(ctx.fds().lora, confirm_message.c_str(),strlen(confirm_message.c_str()));
             if (ret <= 0)
             {
@@ -173,26 +173,27 @@ void packet20(std::string& strPacket){
     LOG_INFO("protocol", "%s", "Start deal 20 time packet");
     if (strPacket.length() < 49) return;
     std::string recv_mac = strPacket.substr(16, 16);
-    if(recv_mac==ctx.identity().mac )
+    if(recv_mac==ctx.getIdentityMac() )
     {
-        ctx.identity().current_time = strPacket.substr(32, 17);
+        std::string current_time = strPacket.substr(32, 17);
+        ctx.setIdentityCurrentTime(current_time);
         struct tm tm_set;
         memset(&tm_set, 0, sizeof(tm_set));
-        tm_set.tm_year = atoi(ctx.identity().current_time.substr(0, 4).c_str()) - 1900;
-        tm_set.tm_mon  = atoi(ctx.identity().current_time.substr(4, 2).c_str()) - 1;
-        tm_set.tm_mday = atoi(ctx.identity().current_time.substr(6, 2).c_str());
-        tm_set.tm_hour = atoi(ctx.identity().current_time.substr(8, 2).c_str());
-        tm_set.tm_min  = atoi(ctx.identity().current_time.substr(10, 2).c_str());
-        tm_set.tm_sec  = atoi(ctx.identity().current_time.substr(12, 2).c_str());
+        tm_set.tm_year = atoi(current_time.substr(0, 4).c_str()) - 1900;
+        tm_set.tm_mon  = atoi(current_time.substr(4, 2).c_str()) - 1;
+        tm_set.tm_mday = atoi(current_time.substr(6, 2).c_str());
+        tm_set.tm_hour = atoi(current_time.substr(8, 2).c_str());
+        tm_set.tm_min  = atoi(current_time.substr(10, 2).c_str());
+        tm_set.tm_sec  = atoi(current_time.substr(12, 2).c_str());
         struct timeval tv_set;
         tv_set.tv_sec = mktime(&tm_set);
         if (tv_set.tv_sec == (time_t)-1) {
             LOG_ERROR("protocol", "%s", "mktime failed in packet20");
             return;
         }
-        tv_set.tv_usec = atoi(ctx.identity().current_time.substr(14, 3).c_str()) * 1000;
+        tv_set.tv_usec = atoi(current_time.substr(14, 3).c_str()) * 1000;
         settimeofday(&tv_set, NULL);
-        LOG_INFO("protocol", "Update time success: %s", ctx.identity().current_time.c_str());
+        LOG_INFO("protocol", "Update time success: %s", current_time.c_str());
     }
 }
 
@@ -312,7 +313,9 @@ std::string buildHeartbeat()
 
     // 获取系统状态
     std::string cpu_mem = get_cpuOccupy();
-    std::string communicateType = std::to_string(ctx.getActiveDeviceId());
+    int activeId = ctx.getActiveDeviceId();
+    // 处理负数设备ID（无可用设备时返回-1）
+    std::string communicateType = (activeId >= 0) ? std::to_string(activeId) : "0";
 
     // 获取队列深度
     int queue_depth = ctx.queues().transmit.size();
@@ -337,8 +340,8 @@ std::string buildHeartbeat()
     char packet[256];
     snprintf(packet, sizeof(packet), "$EF%s%s%s00%s%s@",
              communicateType.c_str(),
-             ctx.identity().id.c_str(),
-             ctx.identity().net_id.c_str(),
+             ctx.getIdentityId().c_str(),
+             ctx.getIdentityNetId().c_str(),
              len_str.c_str(),
              data_segment);
 

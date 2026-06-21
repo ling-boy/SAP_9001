@@ -2,6 +2,7 @@
 #include<stdlib.h>
 #include<string.h>
 #include <unistd.h>
+#include <cerrno>
 #include "infra/get.h"
 #include "infra/logger.h"
 

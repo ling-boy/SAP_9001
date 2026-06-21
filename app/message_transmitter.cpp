@@ -72,6 +72,14 @@ void* send_mess(void* arg)
         tv.tv_sec = 30;
         tv.tv_usec = 0;
         ret = select(deviceFd + 1, &fdset, NULL, NULL, &tv);
+
+        // 检查 fd 是否仍然有效（防止 reinit 关闭了 fd）
+        int currentFd = ctx.commManager().getSuccessFd();
+        if (currentFd != deviceFd) {
+            LOG_WARN("transmit", "FD changed during select (was %d, now %d), retrying", deviceFd, currentFd);
+            continue;
+        }
+
         if (ret == 0) {
             /* select 超时，喂狗后继续循环 */
             g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
@@ -135,40 +143,42 @@ void* send_mess(void* arg)
                             ctx.sensorSync().ship_data_ready = 1;
                             pthread_mutex_unlock(&ctx.sensorSync().mtx);
                             pthread_cond_broadcast(&ctx.sensorSync().cond);
-                            // 使用 offline_mtx 保护 offline_cache 访问
+
+                            // 先取后发模式：在锁内取出所有数据，解锁后逐个发送
+                            std::vector<std::string> pending_packets;
+                            std::vector<std::string> failed_packets;
                             pthread_mutex_lock(&ctx.queues().offline_mtx);
                             while (!ctx.queues().offline_cache.empty()) {
-                                flag = false;
-                                LOG_INFO("transmit", "Offline cache remaining: %zu", ctx.queues().offline_cache.size());
-                                std::string str = ctx.queues().offline_cache.front();
+                                pending_packets.push_back(ctx.queues().offline_cache.front());
                                 ctx.queues().offline_cache.pop();
-                                pthread_mutex_unlock(&ctx.queues().offline_mtx);
-                                ret = write_full(deviceFd, str.c_str(), str.size());
-                                if (ret < 0)
-                                {
-                                    LOG_ERROR("transmit", "TransFd = %d", deviceFd);
-                                    LOG_ERROR("transmit", "data_packet = %s", str.c_str());
-                                    LOG_ERROR("transmit", "Trans error(deviceFd): %s", strerror(errno));
-                                    pthread_mutex_lock(&ctx.queues().offline_mtx);
-                                    ctx.queues().offline_cache.push(str);
-                                    pthread_mutex_unlock(&ctx.queues().offline_mtx);
-                                }
-                                else
-                                {
-                                    sleep(2);
-                                    g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
-                                    LOG_INFO("transmit", "%s", "Sent offline cache packet");
-                                    LOG_INFO("transmit", "hj_crc: %u", ctx.queues().hj_crc);
-                                    LOG_INFO("transmit", "%s", "=======================");
-                                    LOG_INFO("transmit", "data_packet = %s", str.c_str());
-                                    LOG_INFO("transmit", "Trans success(deviceFd) %d", deviceFd);
-                                    LOG_INFO("transmit", "Packet length %zu", strlen(str.c_str()));
-                                }
-                                g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
-                                g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
-                                pthread_mutex_lock(&ctx.queues().offline_mtx);
                             }
                             pthread_mutex_unlock(&ctx.queues().offline_mtx);
+
+                            if (!pending_packets.empty()) {
+                                flag = false;
+                                for (auto& str : pending_packets) {
+                                    LOG_INFO("transmit", "Sending offline cache packet: %s", str.c_str());
+                                    ret = write_full(deviceFd, str.c_str(), str.size());
+                                    if (ret < 0) {
+                                        LOG_ERROR("transmit", "Trans error(deviceFd): %s", strerror(errno));
+                                        failed_packets.push_back(str);
+                                    } else {
+                                        sleep(2);
+                                        g_CsoftwareWdt->KeepSoftwareWdtAlive(wdt_id);
+                                        LOG_INFO("transmit", "Sent offline cache packet success");
+                                    }
+                                    g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().gas_wdt_id);
+                                    g_CsoftwareWdt->KeepSoftwareWdtAlive(ctx.watchdog().ship_wdt_id);
+                                }
+                                // 将发送失败的数据统一放回队列
+                                if (!failed_packets.empty()) {
+                                    pthread_mutex_lock(&ctx.queues().offline_mtx);
+                                    for (auto& str : failed_packets) {
+                                        ctx.queues().offline_cache.push(str);
+                                    }
+                                    pthread_mutex_unlock(&ctx.queues().offline_mtx);
+                                }
+                            }
                             if (flag == false) {
                                 flag = true;
                                 continue;

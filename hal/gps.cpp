@@ -8,6 +8,7 @@
 #include "hal/usbctl.h"
 #include "infra/logger.h"
 #include "infra/config.h"
+#include "core/device_context.h"
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -85,7 +86,11 @@ void* GET_GPS(void* arg)
     fd = open(gps_port.c_str(), O_RDWR | O_NOCTTY);
     if (-1 == fd)
     {
-        LOG_ERROR("gps", "Open GPS device error!");
+        LOG_ERROR("gps", "Open GPS device error! GPS functionality disabled.");
+        // 设置 GPS 失败标志，通知主线程
+        auto& ctx = sap::DeviceContext::instance();
+        ctx.fds().gps_failed = true;
+        return NULL;
     }
     else {
         LOG_INFO("gps", "Open GPS device success");

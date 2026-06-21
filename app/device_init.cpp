@@ -189,7 +189,7 @@ int bt_reinit(int old_fd)
     else
     {
         LOG_INFO("dev_init", "Init success: bluetooth. Device descriptor = %d", ctx.fds().bt);
-        ctx.identity().communicate_status[3] = '1';
+        ctx.identity().communicate_status[2] = '1';  // BT id=3, index=2
         system("echo 1 > /sys/class/leds/green/brightness");
         return ctx.fds().bt;
     }
@@ -217,8 +217,8 @@ int lan_reinit(int old_fd)
         lan_ser_addr.sin_addr.s_addr = inet_addr(cfg_lan_ip().c_str());
         lan_ser_addr.sin_port = htons(cfg_lan_port());
         LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", ctx.fds().lan);
-        /* TODO: 此处使用阻塞connect，若对端不可达会长时间阻塞。建议后续改为 connect_nonb 非阻塞方式 */
-        int lan_fd_connect = connect(ctx.fds().lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr));
+        // 使用非阻塞 connect 避免长时间阻塞
+        int lan_fd_connect = connect_nonb(ctx.fds().lan, (struct sockaddr*)&lan_ser_addr, sizeof(lan_ser_addr), cfg_connect_timeout());
         if (lan_fd_connect < 0)
         {
             LOG_ERROR("dev_init", "lan: connect: %s", strerror(errno));
@@ -230,7 +230,7 @@ int lan_reinit(int old_fd)
             int lan_fd = ctx.fds().lan;
             LOG_INFO("dev_init", "%s", "lanship: connect server success");
             LOG_INFO("dev_init", "Init success: Lan. Device descriptor = %d", lan_fd);
-            ctx.identity().communicate_status[2] = '1';
+            ctx.identity().communicate_status[3] = '1';  // LAN id=4, index=3
             return lan_fd;
         }
     }
@@ -313,11 +313,12 @@ void get_mac()
     }
     char buf[256] = {0};
     if (fgets(buf, sizeof(buf), fp) != NULL) {
-        ctx.identity().mac = std::string(buf, strlen(buf));
+        std::string mac_addr(buf, strlen(buf));
         /* 去除末尾换行符 */
-        if (!ctx.identity().mac.empty() && ctx.identity().mac.back() == '\n') {
-            ctx.identity().mac.pop_back();
+        if (!mac_addr.empty() && mac_addr.back() == '\n') {
+            mac_addr.pop_back();
         }
+        ctx.setIdentityMac(mac_addr);
     }
     fclose(fp);
     return;

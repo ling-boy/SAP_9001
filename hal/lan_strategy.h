@@ -13,6 +13,7 @@
 #include <unistd.h>
 #include <cstring>
 #include <cstdlib>
+#include <cerrno>
 
 namespace sap {
 

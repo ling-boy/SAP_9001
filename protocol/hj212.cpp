@@ -72,16 +72,16 @@ unsigned int CRC16_Checkout(unsigned char* puchMsg, unsigned int usDataLen)
 
 std::string get_MN()
 {
-    std::string temp = "";
+    std::string temp = "0000000000000000";  // 默认值，避免空字符串导致协议包格式错误
     char c[100] = {0};
     FILE* fptr;
     if ((fptr = fopen("./hj_mn.txt", "r")) == NULL)
     {
-        LOG_ERROR("hj212", "Error opening hj_mn.txt");
+        LOG_ERROR("hj212", "Error opening hj_mn.txt, using default MN");
         return temp;
     }
     if (fscanf(fptr, "%99[^\n]", c) != 1) {
-        LOG_ERROR("hj212", "Error reading MN from file");
+        LOG_ERROR("hj212", "Error reading MN from file, using default MN");
         fclose(fptr);
         return temp;
     }

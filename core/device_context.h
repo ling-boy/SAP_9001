@@ -65,6 +65,7 @@ public:
         int lan = -1;
         int lan_server = -1;
         int flag_wifi = 0;
+        bool gps_failed = false;                 // GPS 初始化失败标志
         std::vector<int> device_id;              // 已初始化成功的通信设备ID列表
     };
 

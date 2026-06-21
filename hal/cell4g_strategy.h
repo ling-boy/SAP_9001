@@ -22,7 +22,7 @@ public:
         int server_port = CFG_INT("network.cell4g", "server_port", 8888);
 
         fd_ = cell4g_ip_port_check(
-            const_cast<char*>(server_ip.c_str()), server_port);
+            server_ip.c_str(), server_port);
 
         if (fd_ >= 0) {
             LOG_INFO("cell4g", "4G connected to %s:%d, fd=%d",

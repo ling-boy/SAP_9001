@@ -166,8 +166,8 @@ void* device_regist(void* arg)
         case RegistState::SendRegister:
             sleep(ctx.identity().monitor_time / 4);
             regist_message = std::string("$") + "01" + std::to_string(device_id) +
-                ctx.identity().id + ctx.identity().net_id + "00" + "0026" +
-                ctx.identity().mac + ctx.identity().communicate_status +
+                ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0026" +
+                ctx.getIdentityMac() + ctx.identity().communicate_status +
                 "010" + gps_get_location() + ctx.identity().cpu_occupy + "@";
 
             ret = write_full(fd, regist_message.c_str(), regist_message.size());
@@ -210,19 +210,19 @@ void* device_regist(void* arg)
                     // 收到17协议，提取ISR的MAC地址、设备ID和网络ID
                     if (recv_protocal == REQ_SEND_INFO) {
                         std::string recv_mac = regist_recv_message.substr(16, 16);
-                        if (recv_mac == ctx.identity().mac) {
-                            ctx.identity().isr_mac = regist_recv_message.substr(32, 16);
-                            ctx.identity().id = regist_recv_message.substr(48, 2);
-                            ctx.identity().net_id = regist_recv_message.substr(50, 4);
-                            LOG_INFO("regist", "Gateway assigned ID: %s", ctx.identity().id.c_str());
+                        if (recv_mac == ctx.getIdentityMac()) {
+                            ctx.setIdentityIsrMac(regist_recv_message.substr(32, 16));
+                            ctx.setIdentityId(regist_recv_message.substr(48, 2));
+                            ctx.setIdentityNetId(regist_recv_message.substr(50, 4));
+                            LOG_INFO("regist", "Gateway assigned ID: %s", ctx.getIdentityId().c_str());
                             received_17 = true;
                         }
                     }
                 }
             }
-            if (received_17 && ctx.identity().id != "FF") {
+            if (received_17 && ctx.getIdentityId() != "FF") {
                 state = RegistState::SendConfirm;
-            } else if (ctx.identity().id == "FF") {
+            } else if (ctx.getIdentityId() == "FF") {
                 // 注册被拒绝，重试
                 select_num = 1;
                 regist_num++;
@@ -238,8 +238,8 @@ void* device_regist(void* arg)
 
         case RegistState::SendConfirm: {
             std::string confirm_message = std::string("$") + "02" + std::to_string(device_id) +
-                ctx.identity().id + ctx.identity().net_id + "00" + "0012" +
-                ctx.identity().mac + ctx.identity().id + "@";
+                ctx.getIdentityId() + ctx.getIdentityNetId() + "00" + "0012" +
+                ctx.getIdentityMac() + ctx.getIdentityId() + "@";
             ret = write_full(fd, confirm_message.c_str(), confirm_message.size());
             if (ret < 0) {
                 LOG_ERROR("regist", "%s", "write confirm_message failed!");
@@ -277,27 +277,28 @@ void* device_regist(void* arg)
                     std::string recv_protocal = time_recvmessage.substr(1, 2);
                     std::string recv_mac = time_recvmessage.substr(16, 16);
                     // 收到20协议时间戳，设置系统时间并使能设备
-                    if (recv_protocal == TIME_SEND && recv_mac == ctx.identity().mac) {
-                        ctx.identity().current_time = time_recvmessage.substr(32, 17);
+                    if (recv_protocal == TIME_SEND && recv_mac == ctx.getIdentityMac()) {
+                        ctx.setIdentityCurrentTime(time_recvmessage.substr(32, 17));
                         struct tm tm_set;
                         memset(&tm_set, 0, sizeof(tm_set));
-                        tm_set.tm_year = atoi(ctx.identity().current_time.substr(0, 4).c_str()) - 1900;
-                        tm_set.tm_mon  = atoi(ctx.identity().current_time.substr(4, 2).c_str()) - 1;
-                        tm_set.tm_mday = atoi(ctx.identity().current_time.substr(6, 2).c_str());
-                        tm_set.tm_hour = atoi(ctx.identity().current_time.substr(8, 2).c_str());
-                        tm_set.tm_min  = atoi(ctx.identity().current_time.substr(10, 2).c_str());
-                        tm_set.tm_sec  = atoi(ctx.identity().current_time.substr(12, 2).c_str());
+                        std::string current_time = ctx.getIdentityCurrentTime();
+                        tm_set.tm_year = atoi(current_time.substr(0, 4).c_str()) - 1900;
+                        tm_set.tm_mon  = atoi(current_time.substr(4, 2).c_str()) - 1;
+                        tm_set.tm_mday = atoi(current_time.substr(6, 2).c_str());
+                        tm_set.tm_hour = atoi(current_time.substr(8, 2).c_str());
+                        tm_set.tm_min  = atoi(current_time.substr(10, 2).c_str());
+                        tm_set.tm_sec  = atoi(current_time.substr(12, 2).c_str());
                         struct timeval tv_set;
                         tv_set.tv_sec = mktime(&tm_set);
                         if (tv_set.tv_sec == (time_t)-1) {
                             LOG_ERROR("regist", "%s", "mktime failed, invalid timestamp");
                             continue;
                         }
-                        tv_set.tv_usec = atoi(ctx.identity().current_time.substr(14, 3).c_str()) * 1000;
+                        tv_set.tv_usec = atoi(current_time.substr(14, 3).c_str()) * 1000;
                         if (settimeofday(&tv_set, NULL) != 0) {
                             LOG_ERROR("regist", "settimeofday failed: %s", strerror(errno));
                         }
-                        LOG_INFO("regist", "Set system time success: %s", ctx.identity().current_time.c_str());
+                        LOG_INFO("regist", "Set system time success: %s", current_time.c_str());
                         // 设置系统时间后，将当前通信设备设置为使能状态
                         if (ctx.commManager().setEnable(device_id)) {
                             LOG_INFO("regist", "Device ID=%d enabled", device_id);
