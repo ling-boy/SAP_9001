@@ -122,6 +122,8 @@ void* GET_GPS(void* arg)
         int i = 0;
         int flag_read = 0;
         bool gps_running = true;
+        int gps_log_count = 0;           // GPS 日志计数器
+        const int MAX_GPS_LOG = 5;       // 只打印前 5 条 NMEA 语句
         while (gps_running)
         {
             while (1)
@@ -164,6 +166,15 @@ void* GET_GPS(void* arg)
                 sleep(2);
                 continue;
             }
+            // 只打印前 5 条 NMEA 语句，确认 GPS 模块有数据输出
+            if (gps_log_count < MAX_GPS_LOG) {
+                LOG_DEBUG("gps", "NMEA[%d]: %s", gps_log_count, buf);
+                gps_log_count++;
+                if (gps_log_count == MAX_GPS_LOG) {
+                    LOG_INFO("gps", "%s", "GPS NMEA data confirmed, suppressing further raw output");
+                }
+            }
+
             flag = process_gps(buf, lat, sizeof(lat), f_lat, sizeof(f_lat), lon, sizeof(lon), f_lon, sizeof(f_lon));
             if (-1 == flag)
             {
